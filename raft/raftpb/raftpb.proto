@@ -1,0 +1,54 @@
+syntax = "proto3";
+package raftpb;
+
+message ConfState {
+    repeated uint64 nodes = 1;
+    repeated uint64 learners = 2;
+}
+
+enum EntryType {
+    EntryNormal = 0;
+    EntryConfChange = 1;
+}
+
+message Entry {
+    EntryType Type = 1;
+    uint64 Term = 2;
+    uint64 Index = 3;
+    bytes Data = 4;
+}
+
+message SnapshotMetadata {
+    ConfState conf_state = 1;
+    uint64 index = 2;
+    uint64 term = 3;
+}
+
+message Snapshot {
+    bytes data = 1;
+    SnapshotMetadata metadata = 2;
+}
+
+enum MessageType {
+    MsgHeartbeat = 0;
+    MsgHeatbeatResp = 1;
+    MsgVote = 2;
+    MsgVoteResp = 3;
+    MsgApp = 4;
+    MsgAppResp = 5;
+}
+
+message Message {
+    MessageType type = 1;
+    uint64 to = 2;
+    uint64 from = 3;
+    uint64 term = 4;
+    uint64 logTerm = 5;
+    uint64 index = 6;
+    repeated Entry entires = 7;
+    uint64 commit = 8;
+    Snapshot snapshot = 9;
+    bool reject = 10;
+    uint64 rejectHint = 11;
+    bytes context = 12;
+}
