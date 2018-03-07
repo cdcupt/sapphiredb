@@ -4,13 +4,16 @@
 #include <functional>
 #include <unordered_map>
 #include <vector>
-#include <<utility>>
+#include <utility>
 #include <mutex>
 
-//namespace sapphiredb
-//{
-//namespace raft
-//{
+#include "progress.h"
+#include <raftpb/raftpb.pb.h>
+
+namespace sapphiredb
+{
+namespace raft
+{
 
 enum State{
     STATE_LEADER = 1;
@@ -49,6 +52,9 @@ private:
     uint64_t _id;
     bool isLeader;
     vector<Entire> _entires;
+    //prs represents all follower's progress in the view of the leader.
+    unordered_map<uint64_t, Progress> _prs;
+    unordered_map<uint64_t, int32_t> _votes;
 
     //constant change on all server
     uint64_t _commitIndex;
@@ -67,7 +73,7 @@ private:
     uint32_t _electionTimeout;
 
     //func interface
-    std::function<void()> _step;
+    std::function<void(raftpb::Message msg)> _step;
     std::function<void()> _tick;
 
     //random election time
@@ -77,6 +83,15 @@ private:
     void resetRandomizedElectionTimeout();
     void reset(uint64_t term);
     void quorum();
+    void sendHeartbeat(uint64_t to, std::string& ctx);
+    void forEachProgress(unordered_map<uint64_t, Progress> prs,
+            std::function<void(uint64_t, Progress&)> func);
+    void commitTo(uint64_t commit);
+    void send(raftpb::Message msg);
+    void stepLeader(raftpb::Message msg);
+    void stepCandidate(raftpb::Message msg);
+    int32_t grantMe(uint64_T id, raftpb::MessageType t, bool v);
+    void stepFollower(raftpb::Message msg);
 public:
     Raft();
     ~Raft();
@@ -91,8 +106,10 @@ public:
             uint64_t preLogTerm, vector<Entire> entires, uint64_t leaderCommit);
     pair<uint64_t, bool> requestVote(uint64_t term, uint64_t candidateId,
             uint64_t lastLogIndex, uint64_t lastLogTerm);
+
+    void bcastHeartbeat();
 };
-//} //namespace raft
-//} //namespace sapphiredb
+} //namespace raft
+} //namespace sapphiredb
 
 #endif
