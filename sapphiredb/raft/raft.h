@@ -6,6 +6,8 @@
 #include <vector>
 #include <utility>
 #include <mutex>
+#include <random>
+#include <ctime>
 
 #include "progress.h"
 #include <raftpb/raftpb.pb.h>
@@ -20,6 +22,8 @@ enum State{
     STATE_CANDIDATE = 2;
     SATTE_FOLLOWER  =3;
 }
+
+uint32_t rand(uint32_t min, uint32_t max, uint32_t seed = 0);
 
 class Raft;
 class Raftlog;
@@ -51,6 +55,7 @@ private:
     uint64_t _vote;
     uint64_t _id;
     bool isLeader;
+    FILE* looger;
     vector<Entire> _entires;
     //prs represents all follower's progress in the view of the leader.
     unordered_map<uint64_t, Progress> _prs;
