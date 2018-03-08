@@ -1,5 +1,5 @@
-#ifndef LOGGER_H_
-#define LOGGER_H_
+#ifndef SHAPPHIREDB_COMMON_LOGGER_H_
+#define SHAPPHIREDB_COMMON_LOGGER_H_
 #include <stdio.h>
 #include <string>
 #include <unistd.h>
@@ -15,7 +15,7 @@
 //      NewLogger(path, &logger);
 //    2) use LOGV(LEVEL, logger, fmt, ...);
 //      eg: LOGV(DEBUG_LEVEL, logger, "%s", "example message");
-namespace floyd {
+namespace shapphiredb {
 
 class Logger;
 
@@ -87,5 +87,5 @@ class Logger {
   }
 };
 
-} // namespace floyd
+} // namespace shapphiredb
 #endif

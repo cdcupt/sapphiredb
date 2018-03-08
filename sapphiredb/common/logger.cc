@@ -1,14 +1,14 @@
-#include "floyd/src/logger.h"
+#include "common/logger.h"
 
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <assert.h>
-#include "floyd/include/floyd_options.h"
+#include "common/PikaLabs/floyd/include/floyd_options.h"
 
-#include "slash/include/env.h"
+#include "common/PikaLabs/shaslash/include/env.h"
 
-namespace floyd {
+namespace shapphiredb {
 
 const char* LEVEL_TAG = " DIWEF ";
 
@@ -42,7 +42,7 @@ Logger::Logger(FILE* f)
     flush_pending_(false),
 #ifdef NDEBUG
   log_level_(INFO_LEVEL)
-#else 
+#else
   log_level_(DEBUG_LEVEL)
 #endif
 {}
@@ -60,7 +60,7 @@ void Logger::Flush() {
 }
 
 void Logger::Logv(int log_level, const char* format, va_list ap) {
-  // log_level only between Debug to Fatal 
+  // log_level only between Debug to Fatal
   assert(log_level >= 0 && log_level < 6);
   const uint64_t thread_id = pid();
 
@@ -163,4 +163,4 @@ void Logv(const int log_level, Logger* info_log,
   }
 }
 
-} // namespace floyd
+} // namespace shapphiredb

@@ -24,6 +24,8 @@ public:
     void resetState(ProgressStateType state);
     void setRecentActive();
     void resetRecentActive();
+    uint64_t getMatch();
+    uint64_t getNext();
 };
 //} //namespace raft
 //} //namespace sapphiredb

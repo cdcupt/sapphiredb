@@ -34,3 +34,11 @@ void Progress::setRecentActive(){
 void Progress::resetRecentActive(){
     this._recentActive = false;
 }
+
+uint64_t Progress::getMatch(){
+    return this._match;
+}
+
+uint64_t Progress::getNext(){
+    return this._next;
+}

@@ -79,6 +79,9 @@ private:
     //random election time
     uint32_t _randomizedElectionTimeout;
 
+    //check quorum
+    bool _checkQuorum;
+
     void stepDown();
     void resetRandomizedElectionTimeout();
     void reset(uint64_t term);

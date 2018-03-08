@@ -27,13 +27,29 @@ void Raft::tickElection(){
     ++this._electionElapsed;
     if(pastElectionTimeout()){
         this._electionElapsed = 0;
-        //this.becomeCandidate();
-        //TODO Step
+        raftpb::Message msg;
+        msg.set_From(this._id);
+        msg.set_Type(raftpb::MsgHup);
+        this.generalStep(msg);
     }
 }
 
 void Raft::tickHeartbeat(){
     ++this._heartbeatElapsed;
+    ++this._electionElapsed;
+
+    if(this._electionElapsed >= this._electionTimeout){
+        this._electionElapsed = 0;
+
+        if(this._checkQuorum){
+            raftpb::Message msg;
+            msg.set_From(this._id);
+            msg.set_Type(raftpb::MsgCheckQuorum);
+            this.generalStep(msg);
+        }
+
+        //TODO leader transfer
+    }
     if(this._state != STATE_LEADER){
         ret = TICK_HEARTBEAT_FAILED;
         LOG_ERROR("Other members can't generate a heartbeat apart from the leader, ret=%d", ret);
@@ -41,7 +57,10 @@ void Raft::tickHeartbeat(){
     }
     if(this._heartbeatElasped >= this._heartbeatTimeout){
         this._heartbeatElapsed = 0;
-        //TODO Step
+        raftpb::Message msg;
+        msg.set_From(this._id);
+        msg.set_Type(raftpb::MsgBeat);
+        this.generalStep(msg);
     }
 }
 
@@ -111,7 +130,7 @@ void Raft::stepLeader(raftpb::Message msg){
             }
         case raftpb::MsgTransferLeader :
             {
-
+                //TODO
             }
     }
 }
@@ -197,7 +216,7 @@ void Raft::stepFollower(raftpb::Message msg){
             }
         case raftpb::MsgSnap:
             {
-
+                //TODO
             }
         case raftpb::MsgTransferLeader:
             {
@@ -307,7 +326,6 @@ void Raft::bcastHeartbeat(){
     this.forEachProgress(this._prs,
             [](uint64_t id, Progress _){
                 if(id == this._id) return;
-
                 this.sendHeartbeat(id, std::string(""));
             })
 }
