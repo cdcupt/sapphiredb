@@ -248,27 +248,27 @@ void Raft::stepFollower(raftpb::Message msg){
 
 //send RPC whit entries(or nothing) to the given peer.
 pair<uint64_t, bool> sendAppend(uint64_t term, uint64_t id, uint64_t preLogIndex,
-        uint64_t preLogTerm, vector<Entire> entires, uint64_t leaderCommit){
+        uint64_t preLogTerm, vector<Entrie> entries, uint64_t leaderCommit){
 
     if(term < this->_currentTerm) return pair<uint64_t, bool>(this->_currentTerm, false);
 
-    if(this->_entires.size()<=preLogIndex || this->_entires[preLogIndex].getTerm() != preLogTerm){
+    if(this->_entries.size()<=preLogIndex || this->_entries[preLogIndex].getTerm() != preLogTerm){
         return pair<uint64_t, bool>(this->_currentTerm, false);
     }
 
     //Heartbeat RPC
-    if(entires.empty()) return pair<uint64_t, bool>(this->_currentTerm, true);
+    if(entries.empty()) return pair<uint64_t, bool>(this->_currentTerm, true);
 
-    for(int i=preLogIndex; i<this->_entires.size(); ++i){
-        if(this->_entires[i].getTerm() != entires[i-preLogIndex].getTerm()){
-            this->_entires = vector<Entire>(this->_entires.begin(), this->_entires.begin()+i);
-            this->_entires += vector<Entire>(entires.begin()+i-preLogIndex, entires.end());
+    for(int i=preLogIndex; i<this->_entries.size(); ++i){
+        if(this->_entries[i].getTerm() != entries[i-preLogIndex].getTerm()){
+            this->_entries = vector<Entire>(this->_entries.begin(), this->_entries.begin()+i);
+            this->_entries += vector<Entire>(entries.begin()+i-preLogIndex, entries.end());
             break;
         }
     }
 
     if(leaderCommit > this->_commitIndex) {
-        this->_commitIndex = std::min(leaderCommit, entires[entires.size()-1].getIndex());
+        this->_commitIndex = std::min(leaderCommit, entries[entries.size()-1].getIndex());
     }
 
     return pair<uint64_t, bool>(this->_currentTerm, true);
@@ -285,15 +285,15 @@ pair<uint64_t, bool> requestVote(uint64_t term, uint64_t candidateId,
 
     if(this->_vote != 0) return pair<uint64_t, bool>(this->_currentTerm, false);
 
-    if(this->_entires.size() < lastLogIndex &&
-            this->_entires[this->_entires.size()-1].getTerm() > lastLogTerm)
+    if(this->_entries.size() < lastLogIndex &&
+            this->_entries[this->_entries.size()-1].getTerm() > lastLogTerm)
         return pair<uint64_t, bool>(this->_currentTerm, false);
 
-    if(this->_entires.size() == lastLogIndex &&
-            this->_entires[this->_entires.size()-1].getTerm() != lastLogTerm)
+    if(this->_entries.size() == lastLogIndex &&
+            this->_entries[this->_entries.size()-1].getTerm() != lastLogTerm)
         return pair<uint64_t, bool>(this->_currentTerm, false);
 
-    if(this->_entires.size() > lastLogIndex)
+    if(this->_entries.size() > lastLogIndex)
         return pair<uint64_t, bool>(this->_currentTerm, false);
 
     //vote the candidate
@@ -346,6 +346,45 @@ void Raft::bcastHeartbeat(){
             })
 }
 
+//message box approach sendAppend
 void Raft::sendAppend(uint64_t to){
+    raftpb::Message msg;
+    msg.set_To(to);
 
+    //TODO send snapshot if we failed to get term or entries
+
+    msg.set_Type(raftpb::MsgApp);
+    msg.set_Index(this->_prs[to].getNext());
+    msg.set_LogTerm = this->_entries[this->_entries.size()-1].getIndex();
+
+    for(int i=this->_prs[to]._index; i<this->_entries.size(); ++i){
+        raftpb::Message::Entry* entry = msg.add_entries();
+        entry->set_type(raftpb::EntryType::EntryNormal);
+        entry->set_term(this->_entries[i].getTerm());
+        entry->set_index(this->_entries[i].getIndex());
+        entry->set_data(this->_entries[i].getOpt());
+    }
+
+    msg.set_Commit = this->_commitIndex;
+
+    if(msg.entries_size() > 0){
+        switch(this->_prs[to]._getState()){
+            case ProgressStateReplicate:
+                {
+                    this->_prs[to].optimisticUpdate(msg.entries(msg.entries_size()-1).index());
+                    break;
+                }
+            case ProgressStateProbe:
+                {
+                    //TODO
+                    break;
+                }
+            default:
+                {
+                    LOGV(ERROR_LEVEL, this->logger, "%d is sending append in unhandled state %s",
+                            this->_id, this->_prs[to]._state);
+                }
+        }
+    }
+    this->send(msg);
 }
