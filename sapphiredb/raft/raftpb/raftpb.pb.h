@@ -691,17 +691,17 @@ class Message : public ::google::protobuf::Message /* @@protoc_insertion_point(c
 
   // accessors -------------------------------------------------------
 
-  // repeated .raftpb.Entry entires = 7;
-  int entires_size() const;
-  void clear_entires();
-  static const int kEntiresFieldNumber = 7;
-  const ::raftpb::Entry& entires(int index) const;
-  ::raftpb::Entry* mutable_entires(int index);
-  ::raftpb::Entry* add_entires();
+  // repeated .raftpb.Entry entries = 7;
+  int entries_size() const;
+  void clear_entries();
+  static const int kEntriesFieldNumber = 7;
+  const ::raftpb::Entry& entries(int index) const;
+  ::raftpb::Entry* mutable_entries(int index);
+  ::raftpb::Entry* add_entries();
   ::google::protobuf::RepeatedPtrField< ::raftpb::Entry >*
-      mutable_entires();
+      mutable_entries();
   const ::google::protobuf::RepeatedPtrField< ::raftpb::Entry >&
-      entires() const;
+      entries() const;
 
   // bytes context = 12;
   void clear_context();
@@ -784,7 +784,7 @@ class Message : public ::google::protobuf::Message /* @@protoc_insertion_point(c
  private:
 
   ::google::protobuf::internal::InternalMetadataWithArena _internal_metadata_;
-  ::google::protobuf::RepeatedPtrField< ::raftpb::Entry > entires_;
+  ::google::protobuf::RepeatedPtrField< ::raftpb::Entry > entries_;
   ::google::protobuf::internal::ArenaStringPtr context_;
   ::raftpb::Snapshot* snapshot_;
   ::google::protobuf::uint64 to_;
@@ -1247,34 +1247,34 @@ inline void Message::set_index(::google::protobuf::uint64 value) {
   // @@protoc_insertion_point(field_set:raftpb.Message.index)
 }
 
-// repeated .raftpb.Entry entires = 7;
-inline int Message::entires_size() const {
-  return entires_.size();
+// repeated .raftpb.Entry entries = 7;
+inline int Message::entries_size() const {
+  return entries_.size();
 }
-inline void Message::clear_entires() {
-  entires_.Clear();
+inline void Message::clear_entries() {
+  entries_.Clear();
 }
-inline const ::raftpb::Entry& Message::entires(int index) const {
-  // @@protoc_insertion_point(field_get:raftpb.Message.entires)
-  return entires_.Get(index);
+inline const ::raftpb::Entry& Message::entries(int index) const {
+  // @@protoc_insertion_point(field_get:raftpb.Message.entries)
+  return entries_.Get(index);
 }
-inline ::raftpb::Entry* Message::mutable_entires(int index) {
-  // @@protoc_insertion_point(field_mutable:raftpb.Message.entires)
-  return entires_.Mutable(index);
+inline ::raftpb::Entry* Message::mutable_entries(int index) {
+  // @@protoc_insertion_point(field_mutable:raftpb.Message.entries)
+  return entries_.Mutable(index);
 }
-inline ::raftpb::Entry* Message::add_entires() {
-  // @@protoc_insertion_point(field_add:raftpb.Message.entires)
-  return entires_.Add();
+inline ::raftpb::Entry* Message::add_entries() {
+  // @@protoc_insertion_point(field_add:raftpb.Message.entries)
+  return entries_.Add();
 }
 inline ::google::protobuf::RepeatedPtrField< ::raftpb::Entry >*
-Message::mutable_entires() {
-  // @@protoc_insertion_point(field_mutable_list:raftpb.Message.entires)
-  return &entires_;
+Message::mutable_entries() {
+  // @@protoc_insertion_point(field_mutable_list:raftpb.Message.entries)
+  return &entries_;
 }
 inline const ::google::protobuf::RepeatedPtrField< ::raftpb::Entry >&
-Message::entires() const {
-  // @@protoc_insertion_point(field_list:raftpb.Message.entires)
-  return entires_;
+Message::entries() const {
+  // @@protoc_insertion_point(field_list:raftpb.Message.entries)
+  return entries_;
 }
 
 // uint64 commit = 8;

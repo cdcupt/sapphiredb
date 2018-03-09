@@ -202,7 +202,7 @@ const ::google::protobuf::uint32 TableStruct::offsets[] GOOGLE_PROTOBUF_ATTRIBUT
   GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::raftpb::Message, term_),
   GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::raftpb::Message, logterm_),
   GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::raftpb::Message, index_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::raftpb::Message, entires_),
+  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::raftpb::Message, entries_),
   GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::raftpb::Message, commit_),
   GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::raftpb::Message, snapshot_),
   GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::raftpb::Message, reject_),
@@ -257,7 +257,7 @@ void AddDescriptorsImpl() {
       "\002 \001(\0132\030.raftpb.SnapshotMetadata\"\375\001\n\007Mess"
       "age\022!\n\004type\030\001 \001(\0162\023.raftpb.MessageType\022\n"
       "\n\002to\030\002 \001(\004\022\014\n\004from\030\003 \001(\004\022\014\n\004term\030\004 \001(\004\022\017"
-      "\n\007logTerm\030\005 \001(\004\022\r\n\005index\030\006 \001(\004\022\036\n\007entire"
+      "\n\007logTerm\030\005 \001(\004\022\r\n\005index\030\006 \001(\004\022\036\n\007entrie"
       "s\030\007 \003(\0132\r.raftpb.Entry\022\016\n\006commit\030\010 \001(\004\022\""
       "\n\010snapshot\030\t \001(\0132\020.raftpb.Snapshot\022\016\n\006re"
       "ject\030\n \001(\010\022\022\n\nrejectHint\030\013 \001(\004\022\017\n\007contex"
@@ -1644,7 +1644,7 @@ const int Message::kFromFieldNumber;
 const int Message::kTermFieldNumber;
 const int Message::kLogTermFieldNumber;
 const int Message::kIndexFieldNumber;
-const int Message::kEntiresFieldNumber;
+const int Message::kEntriesFieldNumber;
 const int Message::kCommitFieldNumber;
 const int Message::kSnapshotFieldNumber;
 const int Message::kRejectFieldNumber;
@@ -1663,7 +1663,7 @@ Message::Message()
 Message::Message(const Message& from)
   : ::google::protobuf::Message(),
       _internal_metadata_(NULL),
-      entires_(from.entires_),
+      entries_(from.entries_),
       _cached_size_(0) {
   _internal_metadata_.MergeFrom(from._internal_metadata_);
   context_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
@@ -1728,7 +1728,7 @@ void Message::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  entires_.Clear();
+  entries_.Clear();
   context_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
   if (GetArenaNoVirtual() == NULL && snapshot_ != NULL) {
     delete snapshot_;
@@ -1835,11 +1835,11 @@ bool Message::MergePartialFromCodedStream(
         break;
       }
 
-      // repeated .raftpb.Entry entires = 7;
+      // repeated .raftpb.Entry entries = 7;
       case 7: {
         if (static_cast< ::google::protobuf::uint8>(tag) ==
             static_cast< ::google::protobuf::uint8>(58u /* 58 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadMessage(input, add_entires()));
+          DO_(::google::protobuf::internal::WireFormatLite::ReadMessage(input, add_entries()));
         } else {
           goto handle_unusual;
         }
@@ -1969,11 +1969,11 @@ void Message::SerializeWithCachedSizes(
     ::google::protobuf::internal::WireFormatLite::WriteUInt64(6, this->index(), output);
   }
 
-  // repeated .raftpb.Entry entires = 7;
+  // repeated .raftpb.Entry entries = 7;
   for (unsigned int i = 0,
-      n = static_cast<unsigned int>(this->entires_size()); i < n; i++) {
+      n = static_cast<unsigned int>(this->entries_size()); i < n; i++) {
     ::google::protobuf::internal::WireFormatLite::WriteMessageMaybeToArray(
-      7, this->entires(static_cast<int>(i)), output);
+      7, this->entries(static_cast<int>(i)), output);
   }
 
   // uint64 commit = 8;
@@ -2048,12 +2048,12 @@ void Message::SerializeWithCachedSizes(
     target = ::google::protobuf::internal::WireFormatLite::WriteUInt64ToArray(6, this->index(), target);
   }
 
-  // repeated .raftpb.Entry entires = 7;
+  // repeated .raftpb.Entry entries = 7;
   for (unsigned int i = 0,
-      n = static_cast<unsigned int>(this->entires_size()); i < n; i++) {
+      n = static_cast<unsigned int>(this->entries_size()); i < n; i++) {
     target = ::google::protobuf::internal::WireFormatLite::
       InternalWriteMessageToArray(
-        7, this->entires(static_cast<int>(i)), deterministic, target);
+        7, this->entries(static_cast<int>(i)), deterministic, target);
   }
 
   // uint64 commit = 8;
@@ -2102,14 +2102,14 @@ size_t Message::ByteSizeLong() const {
       ::google::protobuf::internal::WireFormat::ComputeUnknownFieldsSize(
         (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()));
   }
-  // repeated .raftpb.Entry entires = 7;
+  // repeated .raftpb.Entry entries = 7;
   {
-    unsigned int count = static_cast<unsigned int>(this->entires_size());
+    unsigned int count = static_cast<unsigned int>(this->entries_size());
     total_size += 1UL * count;
     for (unsigned int i = 0; i < count; i++) {
       total_size +=
         ::google::protobuf::internal::WireFormatLite::MessageSize(
-          this->entires(static_cast<int>(i)));
+          this->entries(static_cast<int>(i)));
     }
   }
 
@@ -2216,7 +2216,7 @@ void Message::MergeFrom(const Message& from) {
   ::google::protobuf::uint32 cached_has_bits = 0;
   (void) cached_has_bits;
 
-  entires_.MergeFrom(from.entires_);
+  entries_.MergeFrom(from.entries_);
   if (from.context().size() > 0) {
 
     context_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.context_);
@@ -2277,7 +2277,7 @@ void Message::Swap(Message* other) {
 }
 void Message::InternalSwap(Message* other) {
   using std::swap;
-  entires_.InternalSwap(&other->entires_);
+  entries_.InternalSwap(&other->entries_);
   context_.Swap(&other->context_);
   swap(snapshot_, other->snapshot_);
   swap(to_, other->to_);

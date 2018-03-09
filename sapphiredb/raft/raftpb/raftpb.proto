@@ -45,7 +45,7 @@ message Message {
     uint64 term = 4;
     uint64 logTerm = 5;
     uint64 index = 6;
-    repeated Entry entires = 7;
+    repeated Entry entries = 7;
     uint64 commit = 8;
     Snapshot snapshot = 9;
     bool reject = 10;

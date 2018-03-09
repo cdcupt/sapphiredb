@@ -40,8 +40,8 @@ void Raft::tickElection(){
     if(pastElectionTimeout()){
         this->_electionElapsed = 0;
         raftpb::Message msg;
-        msg.set_From(this->_id);
-        msg.set_Type(raftpb::MsgHup);
+        msg.set_from(this->_id);
+        msg.set_type(raftpb::MsgHup);
         this->generalStep(msg);
     }
 }
@@ -55,8 +55,8 @@ void Raft::tickHeartbeat(){
 
         if(this->_checkQuorum){
             raftpb::Message msg;
-            msg.set_From(this->_id);
-            msg.set_Type(raftpb::MsgCheckQuorum);
+            msg.set_from(this->_id);
+            msg.set_type(raftpb::MsgCheckQuorum);
             this->generalStep(msg);
         }
 
@@ -69,8 +69,8 @@ void Raft::tickHeartbeat(){
     if(this->_heartbeatElasped >= this->_heartbeatTimeout){
         this->_heartbeatElapsed = 0;
         raftpb::Message msg;
-        msg.set_From(this->_id);
-        msg.set_Type(raftpb::MsgBeat);
+        msg.set_from(this->_id);
+        msg.set_type(raftpb::MsgBeat);
         this->generalStep(msg);
     }
 }
@@ -182,10 +182,10 @@ void Raft::stepCandidate(raftpb::Message msg){
                 this->commitTo(msg.Commit);
 
                 raftpb::Message tmpMsg;
-                tmpMsg.set_From(this->_id);
-                tmpMsg.set_To(msg.From);
-                tmpMsg.set_Type(raftpb::MsgHeartbeatResp);
-                tmpMsg.set_Context(msg.Context);
+                tmpMsg.set_from(this->_id);
+                tmpMsg.set_to(msg.From);
+                tmpMsg.set_type(raftpb::MsgHeartbeatResp);
+                tmpMsg.set_context(msg.Context);
 
                 this->send(tmpMsg);
                 break;
@@ -222,10 +222,10 @@ void Raft::stepFollower(raftpb::Message msg){
                 this->commitTo(msg.Commit);
 
                 raftpb::Message tmpMsg;
-                tmpMsg.set_From(this->_id);
-                tmpMsg.set_To(msg.From);
-                tmpMsg.set_Type(raftpb::MsgHeartbeatResp);
-                tmpMsg.set_Context(msg.Context);
+                tmpMsg.set_from(this->_id);
+                tmpMsg.set_to(msg.From);
+                tmpMsg.set_type(raftpb::MsgHeartbeatResp);
+                tmpMsg.set_context(msg.Context);
 
                 this->send(tmpMsg);
                 break;
@@ -240,7 +240,7 @@ void Raft::stepFollower(raftpb::Message msg){
                     LOGV(ERROR_LEVEL, this->logger, "id: %d can't transferleader because leader is 0 in term %d", this->_id, this->currentTerm);
                     return;
                 }
-                msg.set_To(this->_leader);
+                msg.set_to(this->_leader);
                 this->send(msg);
             }
     }
@@ -322,11 +322,11 @@ void Raft::sendHeartbeat(uint64_t to, std::string& ctx){
     uint64_t commit = min(this->getProgress(to)._match, this->_commitIndex);
 
     raftpb::Message msg;
-    msg.set_From(this->_id);
-    msg.set_To(to);
-    msg.set_Type(raftpb::MsgHeartbeat);
-    msg.set_Commit(commit);
-    msg.set_Context(ctx);
+    msg.set_from(this->_id);
+    msg.set_to(to);
+    msg.set_type(raftpb::MsgHeartbeat);
+    msg.set_commit(commit);
+    msg.set_context(ctx);
 
     this->send(msg);
 }
@@ -349,13 +349,13 @@ void Raft::bcastHeartbeat(){
 //message box approach sendAppend
 void Raft::sendAppend(uint64_t to){
     raftpb::Message msg;
-    msg.set_To(to);
+    msg.set_to(to);
 
     //TODO send snapshot if we failed to get term or entries
 
-    msg.set_Type(raftpb::MsgApp);
-    msg.set_Index(this->_prs[to].getNext());
-    msg.set_LogTerm = this->_entries[this->_entries.size()-1].getIndex();
+    msg.set_type(raftpb::MsgApp);
+    msg.set_index(this->_prs[to].getNext());
+    msg.set_logterm = this->_entries[this->_entries.size()-1].getIndex();
 
     for(int i=this->_prs[to]._index; i<this->_entries.size(); ++i){
         raftpb::Message::Entry* entry = msg.add_entries();
@@ -365,7 +365,7 @@ void Raft::sendAppend(uint64_t to){
         entry->set_data(this->_entries[i].getOpt());
     }
 
-    msg.set_Commit = this->_commitIndex;
+    msg.set_commit = this->_commitIndex;
 
     if(msg.entries_size() > 0){
         switch(this->_prs[to]._getState()){
