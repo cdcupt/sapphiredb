@@ -9,8 +9,10 @@
 #include <random>
 #include <ctime>
 
-#include "progress.h"
-#include <raftpb/raftpb.pb.h>
+#include "raft/progress.h"
+#include "raft/raftpb/raftpb.pb.h"
+
+#define LONG_CXX11
 
 namespace sapphiredb
 {
@@ -29,6 +31,7 @@ class Raft;
 class Raftlog;
 class Progress;
 
+template<typename T>
 class Entrie{
 private:
     uint64_t _index;
@@ -38,14 +41,26 @@ public:
     uint64_t getTerm(){
         return this._term;
     }
-    uint64_T getIndex(){
+    void setTerm(uint64_t term){
+        this._term = term;
+    }
+
+    uint64_t getIndex(){
         return this._index;
     }
+    void setIndex(uint64_t index){
+        this._index = index;
+    }
+
     ::std::string getOpt(){
         return this._opt;
     }
+    void setOpt(::std::string opt){
+        this._opt = opt;
+    }
 };
 
+//template<typename T, uint32_t MAXPRS>
 class Raft{
 private:
     //other members' information
@@ -101,6 +116,14 @@ private:
     void stepCandidate(raftpb::Message msg);
     int32_t grantMe(uint64_t id, raftpb::MessageType t, bool v);
     void stepFollower(raftpb::Message msg);
+
+    //try to modify constant data
+#ifdef LONG_CXX11
+    uint64_t Raft::tryAppend(uint64_t&& index, uint64_t&& logTerm, uint64_t&& committed, vector<Entrie>&& ents);
+#else
+    uint64_t Raft::tryAppend(uint64_t index, uint64_t logTerm, uint64_t committed, vector<Entrie> ents);
+#endif
+
 public:
     Raft();
     ~Raft();

@@ -1,4 +1,4 @@
-#include "raft.h"
+#include "raft/raft.h"
 
 uint32_t rand(uint32_t min, uint32_t max, uint32_t seed = 0)
 {
@@ -106,7 +106,7 @@ void Raft::quorum(){
 }
 
 void Raft::stepLeader(raftpb::Message msg){
-    switch(msg.Type){
+    switch(msg.type()){
         case raftpb::MsgBeat :
             {
                 this->bcastHeartbeat();
@@ -122,20 +122,30 @@ void Raft::stepLeader(raftpb::Message msg){
             }
     }
 
-    pr = this->getProgress(msg.From);
+    pr = this->getProgress(msg.from());
     if(pr == nullptr){
         //TODO
         return;
     }
 
-    switch(msg.Type){
+    switch(msg.type()){
+        case raftpb::MsgAppResp :
+            {
+                pr.setRecentActive();
+
+                if(msg.reject()){
+                    LOGV(WARN_LEVEL, this->logger, "%d received msgApp rejection(lastindex: %d) from %d for index %d",
+                            this->_id, msg.rejecthint(), msg.from(), msg.index());
+                }
+            }
         case raftpb::MsgHeartbeatResp :
             {
                 pr.setRecentActive();
 
                 if(pr.getMatch() < this->_lastApplied){
-                    this->sendAppend(msg.From);
+                    this->sendAppend(msg.from());
                 }
+                break;
             }
         case raftpb::MsgTransferLeader :
             {
@@ -167,34 +177,83 @@ int32_t grantMe(uint64_t id, raftpb::MessageType t, bool v){
     }
 
     int32_t granted = 0;
+#ifdef LONG_CXX11
     for(auto it = this->_votes.begin(); it != this->_votes.end(); ++it){
         if(it->second > 0) ++granted;
     }
-
+#else
+    for(::std::unordered_map<uint64_t, int32_t>::iterator it = this->_votes.begin(); it != this->_votes.end(); ++it){
+        if(it->second > 0) ++granted;
+    }
+#endif
     return granted;
 }
 
 void Raft::stepCandidate(raftpb::Message msg){
-    switch(msg.Type){
+    switch(msg.type()){
         case raftpb::MsgHeartbeat:
             {
-                this->becomeFollower(msg.Term, msg.From);
-                this->commitTo(msg.Commit);
+                this->becomeFollower(msg.term(), msg.from());
+                this->commitTo(msg.commit());
 
                 raftpb::Message tmpMsg;
                 tmpMsg.set_from(this->_id);
-                tmpMsg.set_to(msg.From);
+                tmpMsg.set_to(msg.from());
                 tmpMsg.set_type(raftpb::MsgHeartbeatResp);
-                tmpMsg.set_context(msg.Context);
+                tmpMsg.set_context(msg.context());
 
                 this->send(tmpMsg);
                 break;
             }
+        case raftpb::MsgApp:
+            {
+                this.becomeFollower(this._currentTerm, msg.from());
+
+                //handle appendEntries
+                if(msg.index() < this->_commitIndex){
+                    raftpb::Message tmsg;
+                    tmsg.set_to(msg.from());
+                    tmsg.set_type(raftpb::MsgAppResp);
+                    tmsg.set_index(this->_commitIndex);
+
+                    this->send(tmsg);
+
+                    return;
+                }
+
+                vector<Entries> ents;
+                for(int i=0; i<msg.entries_size(); ++i){
+                    Entrie ent;
+                    ent.setIndex(msg.entries(i).index());
+                    ent.setTerm(msg.entries(i).term());
+                    ent.setOpt(msg.entries(i).data());
+                    ents.push_back(ent);
+                }
+                if(this->tryAppend(msg.nidex(), msg.logterm(), msg.commit(), ents) > 0){
+                    raftpb::Message tmsg;
+                    tmsp.set_to(msg.from());
+                    tmsg.set_type(raftpb::MsgAppResp);
+                    tmsg.set_index(this->_commitIndex);
+                    this.send(tmsg);
+                }
+                else{
+                    LOGV(INFO_LEVEL, this->logger, "%d rejected msgApp [logterm: %d, index: %d] from %d",
+                            this->_id, msg.logterm(), msg.index(), msg.from());
+
+                    raftpb::Message tmsg;
+                    tmsp.set_to(msg.from());
+                    tmsg.set_type(raftpb::MsgAppResp);
+                    tmsg.set_reject(true);
+                    tmsg.set_index(this->_commitIndex);
+                    this.send(tmsg);
+                }
+                return;
+            }
         case raftpb::MsgVoteResp:
             {
-                int32_t grant = this->grantMe(msg.From, msg.Type, !msg.Reject);
+                int32_t grant = this->grantMe(msg.from(), msg.type(), !msg.reject());
                 LOGV(INFO_LEVEL, this->logger, "%d [quorum: %d] has received %d %s votes and %d vote rejections",
-                        this->_id, this->quorum(), grant, msg.Type, len(this->_votes)-grant);
+                        this->_id, this->quorum(), grant, msg.type(), len(this->_votes)-grant);
                 switch(this->quorum()){
                     case grant:
                         {
@@ -214,25 +273,72 @@ void Raft::stepCandidate(raftpb::Message msg){
 }
 
 void Raft::stepFollower(raftpb::Message msg){
-    switch(msg.Type){
+    switch(msg.type()){
         case raftpb::MsgHeartbeat:
             {
                 this->_electionElapsed = 0;
-                this->_leader = msg.From;
-                this->commitTo(msg.Commit);
+                this->_leader = msg.from();
+                this->commitTo(msg.commit());
 
-                raftpb::Message tmpMsg;
-                tmpMsg.set_from(this->_id);
-                tmpMsg.set_to(msg.From);
-                tmpMsg.set_type(raftpb::MsgHeartbeatResp);
-                tmpMsg.set_context(msg.Context);
+                raftpb::Message tmsg;
+                tmsg.set_from(this->_id);
+                tmsg.set_to(msg.from());
+                tmsg.set_type(raftpb::MsgHeartbeatResp);
+                tmsg.set_context(msg.context());
 
-                this->send(tmpMsg);
+                this->send(tmsg);
                 break;
+            }
+        case raftpb::MsgApp:
+            {
+                this->_electionElapsed = 0;
+                this->leader = msg.from();
+
+                //handle appendEntries
+                if(msg.index() < this->_commitIndex){
+                    raftpb::Message tmsg;
+                    tmsg.set_to(msg.from());
+                    tmsg.set_type(raftpb::MsgAppResp);
+                    tmsg.set_index(this->_commitIndex);
+
+                    this->send(tmsg);
+
+                    return;
+                }
+
+                vector<Entries> ents;
+                for(int i=0; i<msg.entries_size(); ++i){
+                    Entrie ent;
+                    ent.setIndex(msg.entries(i).index());
+                    ent.setTerm(msg.entries(i).term());
+                    ent.setOpt(msg.entries(i).data());
+                    ents.push_back(ent);
+                }
+                if(this->tryAppend(msg.nidex(), msg.logterm(), msg.commit(), ents) > 0){
+                    raftpb::Message tmsg;
+                    tmsp.set_to(msg.from());
+                    tmsg.set_type(raftpb::MsgAppResp);
+                    tmsg.set_index(this->_commitIndex);
+                    this.send(tmsg);
+                }
+                else{
+                    LOGV(INFO_LEVEL, this->logger, "%d rejected msgApp [logterm: %d, index: %d] from %d",
+                            this->_id, msg.logterm(), msg.index(), msg.from());
+
+                    raftpb::Message tmsg;
+                    tmsp.set_to(msg.from());
+                    tmsg.set_type(raftpb::MsgAppResp);
+                    tmsg.set_reject(true);
+                    tmsg.set_index(this->_commitIndex);
+                    this.send(tmsg);
+                }
+
+                return;
             }
         case raftpb::MsgSnap:
             {
                 //TODO
+                break;
             }
         case raftpb::MsgTransferLeader:
             {
@@ -261,8 +367,8 @@ pair<uint64_t, bool> sendAppend(uint64_t term, uint64_t id, uint64_t preLogIndex
 
     for(int i=preLogIndex; i<this->_entries.size(); ++i){
         if(this->_entries[i].getTerm() != entries[i-preLogIndex].getTerm()){
-            this->_entries = vector<Entire>(this->_entries.begin(), this->_entries.begin()+i);
-            this->_entries += vector<Entire>(entries.begin()+i-preLogIndex, entries.end());
+            this->_entries = vector<Entrie>(this->_entries.begin(), this->_entries.begin()+i);
+            this->_entries += vector<Entrie>(entries.begin()+i-preLogIndex, entries.end());
             break;
         }
     }
@@ -302,14 +408,14 @@ pair<uint64_t, bool> requestVote(uint64_t term, uint64_t candidateId,
 }
 
 void Raft::send(raftpb::Message msg){
-    if(msg.Type == raftpb::MsgVote || msg.Type == raftpb::MsgVoteResp){
-        if(msg.Term == 0){
-            LOGV(ERROR_LEVEL, this->logger, "term should be set when sending %s", msg.Type);
+    if(msg.type() == raftpb::MsgVote || msg.type() == raftpb::MsgVoteResp){
+        if(msg.term() == 0){
+            LOGV(ERROR_LEVEL, this->logger, "term should be set when sending %s", msg.type());
         }
     }
     else{
-        if(msg.Term != 0){
-            LOGV(ERROR_LEVEL, this->logger, "term should not be set when sending %s with msg term %d", msg.Type, msg.Term);
+        if(msg.term() != 0){
+            LOGV(ERROR_LEVEL, this->logger, "term should not be set when sending %s with msg term %d", msg.type(), msg.term());
         }
 
         //TODO MsgProp MsgReadIndex
@@ -333,9 +439,15 @@ void Raft::sendHeartbeat(uint64_t to, std::string& ctx){
 
 void Raft::forEachProgress(unordered_map<uint64_t, Progress> prs,
         std::function<void(uint64_t, Progress&)> func){
+#ifdef LONG_CXX11
     for(auto it = prs.begin(); it!=prs.end(); ++it){
         func(it->first, it->second);
     }
+#else
+    for(::std::unordered_map<uint64_t, int32_t>::iterator it = prs.begin(); it!=prs.end(); ++it){
+        func(it->first, it->second);
+    }
+#endif
 }
 
 void Raft::bcastHeartbeat(){
@@ -354,8 +466,8 @@ void Raft::sendAppend(uint64_t to){
     //TODO send snapshot if we failed to get term or entries
 
     msg.set_type(raftpb::MsgApp);
-    msg.set_index(this->_prs[to].getNext());
-    msg.set_logterm = this->_entries[this->_entries.size()-1].getIndex();
+    msg.set_index(this->_prs[to].getNext()-1);
+    msg.set_logterm = this->_entries[this->_entries.size()-1].getTerm();
 
     for(int i=this->_prs[to]._index; i<this->_entries.size(); ++i){
         raftpb::Message::Entry* entry = msg.add_entries();
@@ -388,3 +500,27 @@ void Raft::sendAppend(uint64_t to){
     }
     this->send(msg);
 }
+
+//appent entries to local entries
+//success return index, failed return 0
+#ifdef LANG_CXX11
+uint64_t Raft::tryAppend(uint64_t&& index, uint64_t&& logTerm, uint64_t&& committed, vector<Entrie>&& ents){
+    if(this._prs.size() >= index && this._prs[index-1].getTerm() == logTerm){
+        newIndex = index + ents.size();
+        this._entries += ents;
+
+        return newIndex;
+    }
+    return 0;
+}
+#else
+uint64_t Raft::tryAppend(uint64_t index, uint64_t logTerm, uint64_t committed, vector<Entrie> ents){
+    if(this._prs.size() >= index && this._prs[index-1].getTerm() == logTerm){
+        newIndex = index + ents.size();
+        this._entries += ents;
+
+        return newIndex;
+    }
+    return 0;
+}
+#endif
