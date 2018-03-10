@@ -1,3 +1,10 @@
 {
-    "C_Cpp.errorSquiggles": "Disabled"
+    "C_Cpp.errorSquiggles": "Disabled",
+    "files.associations": {
+        "tuple": "cpp",
+        "type_traits": "cpp",
+        "utility": "cpp",
+        "locale": "cpp",
+        "string": "cpp"
+    }
 }

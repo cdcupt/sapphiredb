@@ -7,25 +7,27 @@ uint32_t rand(uint32_t min, uint32_t max, uint32_t seed = 0)
     return u(e);
 }
 
-void Raft::stepDown(){
-    this->_step = stepFollower;
-    this->reset(this._term);
+void sapphiredb::raft::Raft::stepDown(uint64_t term, uint64_t leader){
+    this->_step = sapphiredb::raft::stepFollower;
+    this->reset(term);
+    this->_tick = sapphiredb::raft::tickElection;
+    this->_leader = leader;
     this->_state = STATE_FOLLOWER;
 
     switch(this->_state){
-        case STATE_LEADER : LOGV(WARN_LEVEL, this->logger, "id: %d step dowm from leader to follower in term %d", this->_id, this->_currentTerm); break;
-        case STATE_CANDIDATE : LOGV(WARN_LEVEL, this->logger, "id: %d step dowm from candidate to follower in term %d", this->_id, this->_currentTerm); break;
+        case STATE_LEADER : LOGV(shapphiredb::WARN_LEVEL, this->logger, "id: %d step dowm from leader to follower in term %d", this->_id, this->_currentTerm); break;
+        case STATE_CANDIDATE : LOGV(shapphiredb::WARN_LEVEL, this->logger, "id: %d step dowm from candidate to follower in term %d", this->_id, this->_currentTerm); break;
+        default: ;
     }
-
 }
 
-void Raft::resetRandomizedElectionTimeout(){
-    this->_randomizedElectionTimeout = this->_electionTimeout + rand(0, this->_elecTimeout, time(NULL));
+void sapphiredb::raft::Raft::resetRandomizedElectionTimeout(){
+    this->_randomizedElectionTimeout = this->_electionTimeout + rand(0, this->_electionTimeout, time(NULL));
 }
 
-void Raft::reset(uint64_t term){
-    if(this->_term != term){
-        this->_term = term;
+void sapphiredb::raft::Raft::reset(uint64_t term){
+    if(this->_currentTerm != term){
+        this->_currentTerm = term;
         this->_vote = 0;//TODO(Invalid representation)
     }
     this->_leader = 0;//TODO(Invalid representation)
@@ -35,115 +37,121 @@ void Raft::reset(uint64_t term){
     this->resetRandomizedElectionTimeout();
 }
 
-void Raft::tickElection(){
-    ++this->_electionElapsed;
-    if(pastElectionTimeout()){
-        this->_electionElapsed = 0;
+bool sapphiredb::raft::Raft::pastElectionTimeout(){
+    return this->_electionElapsed >= this->_randomizedElectionTimeout;
+}
+
+void sapphiredb::raft::tickElection(sapphiredb::raft::Raft* r){
+    ++r->_electionElapsed;
+    if(r->pastElectionTimeout()){
+        r->_electionElapsed = 0;
         raftpb::Message msg;
-        msg.set_from(this->_id);
+        msg.set_from(r->_id);
         msg.set_type(raftpb::MsgHup);
-        this->generalStep(msg);
+        r->generalStep(msg);
     }
 }
 
-void Raft::tickHeartbeat(){
-    ++this->_heartbeatElapsed;
-    ++this->_electionElapsed;
+void sapphiredb::raft::tickHeartbeat(sapphiredb::raft::Raft* r){
+    ++r->_heartbeatElapsed;
+    ++r->_electionElapsed;
 
-    if(this->_electionElapsed >= this->_electionTimeout){
-        this._electionElapsed = 0;
+    if(r->_electionElapsed >= r->_electionTimeout){
+        r->_electionElapsed = 0;
 
-        if(this->_checkQuorum){
+        if(r->_checkQuorum){
             raftpb::Message msg;
-            msg.set_from(this->_id);
+            msg.set_from(r->_id);
             msg.set_type(raftpb::MsgCheckQuorum);
-            this->generalStep(msg);
+            r->generalStep(msg);
         }
 
         //TODO leader transfer
     }
-    if(this->_state != STATE_LEADER){
-        LOGV(ERROR_LEVEL, this->logger, "id: %d produce invaild heartbeat in term %d.", this->_id, this->_currentTerm);
+    if(r->_state != STATE_LEADER){
+        LOGV(shapphiredb::ERROR_LEVEL, r->logger, "id: %d produce invaild heartbeat in term %d.", r->_id, r->_currentTerm);
         return;
     }
-    if(this->_heartbeatElasped >= this->_heartbeatTimeout){
-        this->_heartbeatElapsed = 0;
+    if(r->_heartbeatElapsed >= r->_heartbeatTimeout){
+        r->_heartbeatElapsed = 0;
         raftpb::Message msg;
-        msg.set_from(this->_id);
-        msg.set_type(raftpb::MsgBeat);
-        this->generalStep(msg);
+        msg.set_from(r->_id);
+        msg.set_type(raftpb::MsgHeartbeat);
+        r->generalStep(msg);
     }
 }
 
-void Raft::becomeCandidate(){
+void sapphiredb::raft::Raft::becomeCandidate(){
     if(this->_state == STATE_LEADER){
-        LOGV(ERROR_LEVEL, this->logger, "id: %d try to become candidate in term %d.", this->_id, this->_currentTerm);
+        LOGV(shapphiredb::ERROR_LEVEL, this->logger, "id: %d try to become candidate in term %d.", this->_id, this->_currentTerm);
         return;
     }
-    this->_step = stepCandidate;
-    this->reset(this->_term + 1);
-    this->_tick = this->tickElection;
+    this->_step = sapphiredb::raft::stepCandidate;
+    this->reset(this->_currentTerm + 1);
+    this->_tick = sapphiredb::raft::tickElection;
     this->_vote = this->_id;
     this->_state = STATE_CANDIDATE;
-    LOGV(WARN_LEVEL, this->logger, "id: %d from follower change to candidate in term %d.", this->_id, this->_currentTerm);
+    LOGV(shapphiredb::WARN_LEVEL, this->logger, "id: %d from follower change to candidate in term %d.", this->_id, this->_currentTerm);
 }
 
-void Raft::becomeLeader(){
+void sapphiredb::raft::Raft::becomeLeader(){
     if(this->_state == STATE_FOLLOWER){
-        LOGV(ERROR_LEVEL, this->logger, "id: %d try to change to candidate from leader in term %d.", this->_id, this->_currentTerm);
+        LOGV(shapphiredb::ERROR_LEVEL, this->logger, "id: %d try to change to candidate from leader in term %d.", this->_id, this->_currentTerm);
         return;
     }
-    this->_step = stepLeader;
-    this->reset(this->_term);
+    this->_step = sapphiredb::raft::stepLeader;
+    this->reset(this->_currentTerm);
+    this->_tick = sapphiredb::raft::tickHeartbeat;
     this->_leader = this->_id;
     this->_state = STATE_LEADER;
     //TODO(Additional log)
-    LOGV(WARN_LEVEL, this->logger, "id : %d from candidate change to leader in term %d.", this->_id, this->_currentTerm);
+    LOGV(shapphiredb::WARN_LEVEL, this->logger, "id : %d from candidate change to leader in term %d.", this->_id, this->_currentTerm);
 }
 
-void Raft::quorum(){
-    return this->prs.size()/2+1;
+uint32_t sapphiredb::raft::Raft::quorum(){
+    return (this->prs.size())/2+1;
 }
 
-void Raft::stepLeader(raftpb::Message msg){
+void sapphiredb::raft::stepLeader(sapphiredb::raft::Raft* r, raftpb::Message msg){
     switch(msg.type()){
-        case raftpb::MsgBeat :
+        case raftpb::MsgHeartbeat:
             {
-                this->bcastHeartbeat();
+                r->bcastHeartbeat();
                 return;
             }
         //proactively check for quorum
-        case raftpb::MsgCheckQuorum :
+        case raftpb::MsgCheckQuorum:
             {
-                if(!this->checkQuorumActive()){
-                    this->becomeFollower(this->_currentTerm, 0);
+                if(!r->checkQuorumActive()){
+                    r->stepDown(r->_currentTerm, 0);
                 }
                 return;
             }
+        default: ;
     }
 
-    pr = this->getProgress(msg.from());
-    if(pr == nullptr){
+    if(r->_prs.find(msg.from()) == r->_prs.end()){
         //TODO
         return;
     }
 
+    sapphiredb::raft::Progress pr = r->_prs[msg.from()];
     switch(msg.type()){
         case raftpb::MsgAppResp :
             {
                 pr.setRecentActive();
 
                 if(msg.reject()){
-                    LOGV(WARN_LEVEL, this->logger, "%d received msgApp rejection(lastindex: %d) from %d for index %d",
-                            this->_id, msg.rejecthint(), msg.from(), msg.index());
+                    LOGV(shapphiredb::WARN_LEVEL, r->logger, "%d received msgApp rejection(lastindex: %d) from %d for index %d",
+                            r->_id, msg.rejecthint(), msg.from(), msg.index());
                 }
             }
         case raftpb::MsgHeartbeatResp :
             {
                 pr.setRecentActive();
 
-                if(pr.getMatch() < this->_lastApplied){
-                    this->sendAppend(msg.from());
+                if(pr.getMatch() < r->_lastApplied){
+                    r->sendAppend(msg.from());
                 }
                 break;
             }
@@ -151,25 +159,26 @@ void Raft::stepLeader(raftpb::Message msg){
             {
                 //TODO
             }
+        default: ;
     }
 }
 
-void Raft::commitTo(uint64_t commit){
+void sapphiredb::raft::Raft::commitTo(uint64_t commit){
     if(this->_commitIndex < commit){
         if(this->_lastApplied < commit){
-            LOGV(ERROR_LEVEL, this->logger, "commit(%d) is out of range [lastIndex(%d)]. Was the raft log corrupted,
-                    truncated, or lost?", commit, this->_lastApplied);
+            LOGV(shapphiredb::ERROR_LEVEL, this->logger, "commit(%d) is out of range [lastIndex(%d)]. Was the raft log corrupted, truncated, or lost?",
+             commit, this->_lastApplied);
         }
         this->_commitIndex = commit;
     }
 }
 
-int32_t grantMe(uint64_t id, raftpb::MessageType t, bool v){
+int32_t sapphiredb::raft::Raft::grantMe(uint64_t id, raftpb::MessageType t, bool v){
     if(v){
-        LOGV(INFO_LEVEL, this->logger, "%d received %s from %d at term %d", this->_id, t, id, this->_currentTerm);
+        LOGV(shapphiredb::INFO_LEVEL, this->logger, "%d received %s from %d at term %d", this->_id, t, id, this->_currentTerm);
     }
     else{
-        LOGV(INFO_LEVEL, this->logger, "%d received %s rejection from %d at term %d", this->_id, t, id, this->_currentTerm);
+        LOGV(shapphiredb::INFO_LEVEL, this->logger, "%d received %s rejection from %d at term %d", this->_id, t, id, this->_currentTerm);
     }
 
     if(this->_votes.find(id) == this->_votes.end()){
@@ -189,39 +198,39 @@ int32_t grantMe(uint64_t id, raftpb::MessageType t, bool v){
     return granted;
 }
 
-void Raft::stepCandidate(raftpb::Message msg){
+void sapphiredb::raft::stepCandidate(sapphiredb::raft::Raft* r, raftpb::Message msg){
     switch(msg.type()){
         case raftpb::MsgHeartbeat:
             {
-                this->becomeFollower(msg.term(), msg.from());
-                this->commitTo(msg.commit());
+                r->stepDown(msg.term(), msg.from());
+                r->commitTo(msg.commit());
 
                 raftpb::Message tmpMsg;
-                tmpMsg.set_from(this->_id);
+                tmpMsg.set_from(r->_id);
                 tmpMsg.set_to(msg.from());
                 tmpMsg.set_type(raftpb::MsgHeartbeatResp);
                 tmpMsg.set_context(msg.context());
 
-                this->send(tmpMsg);
+                r->send(tmpMsg);
                 break;
             }
         case raftpb::MsgApp:
             {
-                this.becomeFollower(this._currentTerm, msg.from());
+                r->stepDown(r->_currentTerm, msg.from());
 
                 //handle appendEntries
-                if(msg.index() < this->_commitIndex){
+                if(msg.index() < r->_commitIndex){
                     raftpb::Message tmsg;
                     tmsg.set_to(msg.from());
                     tmsg.set_type(raftpb::MsgAppResp);
-                    tmsg.set_index(this->_commitIndex);
+                    tmsg.set_index(r->_commitIndex);
 
-                    this->send(tmsg);
+                    r->send(tmsg);
 
                     return;
                 }
 
-                vector<Entries> ents;
+                ::std::vector<Entrie> ents;
                 for(int i=0; i<msg.entries_size(); ++i){
                     Entrie ent;
                     ent.setIndex(msg.entries(i).index());
@@ -229,84 +238,79 @@ void Raft::stepCandidate(raftpb::Message msg){
                     ent.setOpt(msg.entries(i).data());
                     ents.push_back(ent);
                 }
-                if(this->tryAppend(msg.nidex(), msg.logterm(), msg.commit(), ents) > 0){
+                if(r->tryAppend(msg.index(), msg.logterm(), msg.commit(), ents) > 0){
                     raftpb::Message tmsg;
-                    tmsp.set_to(msg.from());
+                    tmsg.set_to(msg.from());
                     tmsg.set_type(raftpb::MsgAppResp);
-                    tmsg.set_index(this->_commitIndex);
-                    this.send(tmsg);
+                    tmsg.set_index(r->_commitIndex);
+                    r->send(tmsg);
                 }
                 else{
-                    LOGV(INFO_LEVEL, this->logger, "%d rejected msgApp [logterm: %d, index: %d] from %d",
-                            this->_id, msg.logterm(), msg.index(), msg.from());
+                    LOGV(shapphiredb::INFO_LEVEL, r->logger, "%d rejected msgApp [logterm: %d, index: %d] from %d",
+                            r->_id, msg.logterm(), msg.index(), msg.from());
 
                     raftpb::Message tmsg;
-                    tmsp.set_to(msg.from());
+                    tmsg.set_to(msg.from());
                     tmsg.set_type(raftpb::MsgAppResp);
                     tmsg.set_reject(true);
-                    tmsg.set_index(this->_commitIndex);
-                    this.send(tmsg);
+                    tmsg.set_index(r->_commitIndex);
+                    r->send(tmsg);
                 }
                 return;
             }
         case raftpb::MsgVoteResp:
             {
-                int32_t grant = this->grantMe(msg.from(), msg.type(), !msg.reject());
-                LOGV(INFO_LEVEL, this->logger, "%d [quorum: %d] has received %d %s votes and %d vote rejections",
-                        this->_id, this->quorum(), grant, msg.type(), len(this->_votes)-grant);
-                switch(this->quorum()){
-                    case grant:
-                        {
-                            this->becomeLeader();
-                            this->bcastAppend();
-                            break;
-                        }
-                    case this->_votes.size() - grant:
-                        {
-                            this->becomeFollower(this->_currentTerm, 0);
-                            break;
-                        }
+                int32_t grant = r->grantMe(msg.from(), msg.type(), !msg.reject());
+                LOGV(shapphiredb::INFO_LEVEL, r->logger, "%d [quorum: %d] has received %d %s votes and %d vote rejections",
+                        r->_id, r->quorum(), grant, msg.type(), r->_votes.size()-grant);
+                if(r->quorum() == grant){
+                    r->becomeLeader();
+                    r->bcastAppend();
+                }
+                else if(r->quorum() == r->_votes.size() - grant){
+                    r->stepDown(r->_currentTerm, 0);
                 }
                 break;
             }
+        default: ;
     }
 }
 
-void Raft::stepFollower(raftpb::Message msg){
+void sapphiredb::raft::stepFollower(sapphiredb::raft::Raft* r, raftpb::Message msg){
     switch(msg.type()){
         case raftpb::MsgHeartbeat:
             {
-                this->_electionElapsed = 0;
-                this->_leader = msg.from();
-                this->commitTo(msg.commit());
+                r->_electionElapsed = 0;
+                r->_leader = msg.from();
+                r->commitTo(msg.commit());
 
                 raftpb::Message tmsg;
-                tmsg.set_from(this->_id);
+                tmsg.set_from(r->_id);
                 tmsg.set_to(msg.from());
                 tmsg.set_type(raftpb::MsgHeartbeatResp);
                 tmsg.set_context(msg.context());
 
-                this->send(tmsg);
+                r->send(tmsg);
                 break;
             }
         case raftpb::MsgApp:
             {
-                this->_electionElapsed = 0;
-                this->leader = msg.from();
+                r->_electionElapsed = 0;
+                r->_leader = msg.from();
 
                 //handle appendEntries
-                if(msg.index() < this->_commitIndex){
+                if(msg.index() < r->_commitIndex){
                     raftpb::Message tmsg;
                     tmsg.set_to(msg.from());
                     tmsg.set_type(raftpb::MsgAppResp);
-                    tmsg.set_index(this->_commitIndex);
+                    tmsg.set_index(r->_commitIndex);
 
-                    this->send(tmsg);
+                    r->send(tmsg);
 
                     return;
                 }
 
-                vector<Entries> ents;
+                ::std::vector<Entrie> ents;
                 for(int i=0; i<msg.entries_size(); ++i){
                     Entrie ent;
                     ent.setIndex(msg.entries(i).index());
@@ -314,23 +318,23 @@ void Raft::stepFollower(raftpb::Message msg){
                     ent.setOpt(msg.entries(i).data());
                     ents.push_back(ent);
                 }
-                if(this->tryAppend(msg.nidex(), msg.logterm(), msg.commit(), ents) > 0){
+                if(r->tryAppend(msg.index(), msg.logterm(), msg.commit(), ents) > 0){
                     raftpb::Message tmsg;
-                    tmsp.set_to(msg.from());
+                    tmsg.set_to(msg.from());
                     tmsg.set_type(raftpb::MsgAppResp);
-                    tmsg.set_index(this->_commitIndex);
-                    this.send(tmsg);
+                    tmsg.set_index(r->_commitIndex);
+                    r->send(tmsg);
                 }
                 else{
-                    LOGV(INFO_LEVEL, this->logger, "%d rejected msgApp [logterm: %d, index: %d] from %d",
-                            this->_id, msg.logterm(), msg.index(), msg.from());
+                    LOGV(shapphiredb::INFO_LEVEL, r->logger, "%d rejected msgApp [logterm: %d, index: %d] from %d",
+                            r->_id, msg.logterm(), msg.index(), msg.from());
 
                     raftpb::Message tmsg;
-                    tmsp.set_to(msg.from());
+                    tmsg.set_to(msg.from());
                     tmsg.set_type(raftpb::MsgAppResp);
                     tmsg.set_reject(true);
-                    tmsg.set_index(this->_commitIndex);
-                    this.send(tmsg);
+                    tmsg.set_index(r->_commitIndex);
+                    r->send(tmsg);
                 }
 
                 return;
@@ -342,33 +346,35 @@ void Raft::stepFollower(raftpb::Message msg){
             }
         case raftpb::MsgTransferLeader:
             {
-                if(this->_leader == 0){
-                    LOGV(ERROR_LEVEL, this->logger, "id: %d can't transferleader because leader is 0 in term %d", this->_id, this->currentTerm);
+                if(r->_leader == 0){
+                    LOGV(shapphiredb::ERROR_LEVEL, r->logger, "id: %d can't transferleader because leader is 0 in term %d", r->_id, r->_currentTerm);
                     return;
                 }
-                msg.set_to(this->_leader);
-                this->send(msg);
+                msg.set_to(r->_leader);
+                r->send(msg);
             }
+        default: ;
     }
 }
 
 //send RPC whit entries(or nothing) to the given peer.
-pair<uint64_t, bool> sendAppend(uint64_t term, uint64_t id, uint64_t preLogIndex,
-        uint64_t preLogTerm, vector<Entrie> entries, uint64_t leaderCommit){
+/*
+::std::pair<uint64_t, bool> sendAppend(uint64_t term, uint64_t id, uint64_t preLogIndex,
+        uint64_t preLogTerm, ::std::vector<sapphiredb::raft::Entrie> entries, uint64_t leaderCommit){
 
-    if(term < this->_currentTerm) return pair<uint64_t, bool>(this->_currentTerm, false);
+    if(term < this->_currentTerm) return ::std::pair<uint64_t, bool>(this->_currentTerm, false);
 
     if(this->_entries.size()<=preLogIndex || this->_entries[preLogIndex].getTerm() != preLogTerm){
-        return pair<uint64_t, bool>(this->_currentTerm, false);
+        return ::std::pair<uint64_t, bool>(this->_currentTerm, false);
     }
 
     //Heartbeat RPC
-    if(entries.empty()) return pair<uint64_t, bool>(this->_currentTerm, true);
+    if(entries.empty()) return ::std::pair<uint64_t, bool>(this->_currentTerm, true);
 
     for(int i=preLogIndex; i<this->_entries.size(); ++i){
         if(this->_entries[i].getTerm() != entries[i-preLogIndex].getTerm()){
-            this->_entries = vector<Entrie>(this->_entries.begin(), this->_entries.begin()+i);
-            this->_entries += vector<Entrie>(entries.begin()+i-preLogIndex, entries.end());
+            this->_entries = ::std::vector<Entrie>(this->_entries.begin(), this->_entries.begin()+i);
+            this->_entries += ::std::vector<Entrie>(entries.begin()+i-preLogIndex, entries.end());
             break;
         }
     }
@@ -377,55 +383,59 @@ pair<uint64_t, bool> sendAppend(uint64_t term, uint64_t id, uint64_t preLogIndex
         this->_commitIndex = std::min(leaderCommit, entries[entries.size()-1].getIndex());
     }
 
-    return pair<uint64_t, bool>(this->_currentTerm, true);
+    return ::std::pair<uint64_t, bool>(this->_currentTerm, true);
 }
+*/
 
 // send RPC with request other members to vote
-pair<uint64_t, bool> requestVote(uint64_t term, uint64_t candidateId,
+/*
+::std::pair<uint64_t, bool> requestVote(uint64_t term, uint64_t candidateId,
         uint64_t lastLogIndex, uint64_t lastLogTerm){
 
-    if(term < this->_currentTerm) return pair<uint64_t, bool>(this->_currentTerm, false);
+    if(term < this->_currentTerm) return ::std::pair<uint64_t, bool>(this->_currentTerm, false);
 
     if(this->_state==STATE_LEADER || this->_state==STATE_CANDIDATE)
-        return pair<uint64_t, bool>(this->_currentTerm, false);
+        return ::std::pair<uint64_t, bool>(this->_currentTerm, false);
 
-    if(this->_vote != 0) return pair<uint64_t, bool>(this->_currentTerm, false);
+    if(this->_vote != 0) return ::std::pair<uint64_t, bool>(this->_currentTerm, false);
 
     if(this->_entries.size() < lastLogIndex &&
             this->_entries[this->_entries.size()-1].getTerm() > lastLogTerm)
-        return pair<uint64_t, bool>(this->_currentTerm, false);
+        return ::std::pair<uint64_t, bool>(this->_currentTerm, false);
 
     if(this->_entries.size() == lastLogIndex &&
             this->_entries[this->_entries.size()-1].getTerm() != lastLogTerm)
-        return pair<uint64_t, bool>(this->_currentTerm, false);
+        return ::std::pair<uint64_t, bool>(this->_currentTerm, false);
 
     if(this->_entries.size() > lastLogIndex)
-        return pair<uint64_t, bool>(this->_currentTerm, false);
+        return ::std::pair<uint64_t, bool>(this->_currentTerm, false);
 
     //vote the candidate
     this->_vote = candidateId;
-    return pair<uint64_t, bool>(this->_currentTerm, true);
+    return ::std::pair<uint64_t, bool>(this->_currentTerm, true);
 }
+*/
 
-void Raft::send(raftpb::Message msg){
+void sapphiredb::raft::Raft::send(raftpb::Message msg){
     if(msg.type() == raftpb::MsgVote || msg.type() == raftpb::MsgVoteResp){
         if(msg.term() == 0){
-            LOGV(ERROR_LEVEL, this->logger, "term should be set when sending %s", msg.type());
+            LOGV(shapphiredb::ERROR_LEVEL, this->logger, "term should be set when sending %s", msg.type());
         }
     }
     else{
         if(msg.term() != 0){
-            LOGV(ERROR_LEVEL, this->logger, "term should not be set when sending %s with msg term %d", msg.type(), msg.term());
+            LOGV(shapphiredb::ERROR_LEVEL, this->logger, "term should not be set when sending %s with msg term %d", msg.type(), msg.term());
         }
 
         //TODO MsgProp MsgReadIndex
     }
 
-    this->_msgs = this->_msgs + msg;
+    //TODO message queue
+    this->_msgs.push_back(msg);
 }
 
-void Raft::sendHeartbeat(uint64_t to, std::string& ctx){
-    uint64_t commit = min(this->getProgress(to)._match, this->_commitIndex);
+void sapphiredb::raft::Raft::sendHeartbeat(uint64_t to, std::string ctx){
+    uint64_t commit = ::std::min(this->_prs[to].getMatch(), this->_commitIndex);
 
     raftpb::Message msg;
     msg.set_from(this->_id);
@@ -437,11 +447,11 @@ void Raft::sendHeartbeat(uint64_t to, std::string& ctx){
     this->send(msg);
 }
 
-void Raft::forEachProgress(unordered_map<uint64_t, Progress> prs,
-        std::function<void(uint64_t, Progress&)> func){
+void sapphiredb::raft::Raft::forEachProgress(::std::unordered_map<uint64_t, Progress> prs,
+        std::function<void(sapphiredb::raft::Raft*, uint64_t, Progress&)> func){
 #ifdef LONG_CXX11
     for(auto it = prs.begin(); it!=prs.end(); ++it){
-        func(it->first, it->second);
+        func(this, it->first, it->second);
     }
 #else
     for(::std::unordered_map<uint64_t, int32_t>::iterator it = prs.begin(); it!=prs.end(); ++it){
@@ -450,16 +460,17 @@ void Raft::forEachProgress(unordered_map<uint64_t, Progress> prs,
 #endif
 }
 
-void Raft::bcastHeartbeat(){
-    this->forEachProgress(this->_prs,
-            [](uint64_t id, Progress _){
-                if(id == this->_id) return;
-                this->sendHeartbeat(id, std::string(""));
-            })
+void sapphiredb::raft::Raft::bcastHeartbeat(){
+#ifdef LONG_CXX11
+    auto fun = [](sapphiredb::raft::Raft* r, uint64_t id, sapphiredb::raft::Progress _) { if(id == r->_id) return; r->sendHeartbeat(id, ::std::string(""));};
+#else
+    ::std::function<void(uint64_t id, sapphiredb::raft::Progress _)> fun = [](uint64_t id, Progress _) { if(id == this->_id) return; this->sendHeartbeat(id, std::string(""));};
+#endif
+    this->forEachProgress(this->_prs, fun);
 }
 
 //message box approach sendAppend
-void Raft::sendAppend(uint64_t to){
+void sapphiredb::raft::Raft::sendAppend(uint64_t to){
     raftpb::Message msg;
     msg.set_to(to);
 
@@ -467,20 +478,20 @@ void Raft::sendAppend(uint64_t to){
 
     msg.set_type(raftpb::MsgApp);
     msg.set_index(this->_prs[to].getNext()-1);
-    msg.set_logterm = this->_entries[this->_entries.size()-1].getTerm();
+    msg.set_logterm(this->_entries[this->_entries.size()-1].getTerm());
 
-    for(int i=this->_prs[to]._index; i<this->_entries.size(); ++i){
-        raftpb::Message::Entry* entry = msg.add_entries();
+    for(int i=this->_prs[to].getNext()-1; i<this->_entries.size(); ++i){
+        raftpb::Entry* entry = msg.add_entries();
         entry->set_type(raftpb::EntryType::EntryNormal);
         entry->set_term(this->_entries[i].getTerm());
         entry->set_index(this->_entries[i].getIndex());
         entry->set_data(this->_entries[i].getOpt());
     }
 
-    msg.set_commit = this->_commitIndex;
+    msg.set_commit(this->_commitIndex);
 
     if(msg.entries_size() > 0){
-        switch(this->_prs[to]._getState()){
+        switch(this->_prs[to].getState()){
             case ProgressStateReplicate:
                 {
                     this->_prs[to].optimisticUpdate(msg.entries(msg.entries_size()-1).index());
@@ -493,34 +504,101 @@ void Raft::sendAppend(uint64_t to){
                 }
             default:
                 {
-                    LOGV(ERROR_LEVEL, this->logger, "%d is sending append in unhandled state %s",
-                            this->_id, this->_prs[to]._state);
+                    LOGV(shapphiredb::ERROR_LEVEL, this->logger, "%d is sending append in unhandled state %s",
+                            this->_id, this->_prs[to].getState());
                 }
         }
     }
     this->send(msg);
 }
 
+bool sapphiredb::raft::Raft::checkQuorumActive(){
+    return true;
+    //TODO just test
+}
+
 //appent entries to local entries
 //success return index, failed return 0
-#ifdef LANG_CXX11
-uint64_t Raft::tryAppend(uint64_t&& index, uint64_t&& logTerm, uint64_t&& committed, vector<Entrie>&& ents){
-    if(this._prs.size() >= index && this._prs[index-1].getTerm() == logTerm){
-        newIndex = index + ents.size();
-        this._entries += ents;
+uint64_t sapphiredb::raft::Raft::tryAppend(const uint64_t& index, const uint64_t& logTerm, const uint64_t& committed, const ::std::vector<Entrie>& ents){
+    if(this->_prs.size() >= index && this->_commitIndex == logTerm){
+        uint64_t newIndex = index + ents.size();
+        this->_entries.insert(this->_entries.end(), ents.begin(), ents.end());
 
         return newIndex;
     }
     return 0;
 }
-#else
-uint64_t Raft::tryAppend(uint64_t index, uint64_t logTerm, uint64_t committed, vector<Entrie> ents){
-    if(this._prs.size() >= index && this._prs[index-1].getTerm() == logTerm){
-        newIndex = index + ents.size();
-        this._entries += ents;
 
-        return newIndex;
-    }
-    return 0;
+void sapphiredb::raft::Raft::bcastAppend(){
+    this->forEachProgress(this->_prs, [](sapphiredb::raft::Raft* r, uint64_t id, Progress& _){
+        if(id == r->_id) return;
+
+        r->sendAppend(id);
+    });
 }
-#endif
+
+void sapphiredb::raft::Raft::generalStep(raftpb::Message msg){
+    if(msg.term() == 0){
+        //TODO
+    }
+    else if(msg.term() > this->_currentTerm){
+        if(msg.type() == raftpb::MsgVote && this->_checkQuorum && this->_leader != 0 &&
+                this->_electionElapsed < this->_electionTimeout){
+             LOGV(shapphiredb::ERROR_LEVEL, this->logger, "id: %d ignore vote request from %d [logterm: %d, index: %d]",
+                     this->_id, msg.from(), msg.logterm(), msg.index());
+            return;
+        }
+
+        LOGV(shapphiredb::ERROR_LEVEL, this->logger, "%d in term: %d receive a %s message from %d at term: %d",
+            this->_id, this->_currentTerm, msg.type(), msg.from(), msg.term());
+        this->stepDown(msg.term(), msg.from());
+    }
+    else if(msg.term() < this->_currentTerm){
+        if(this->_checkQuorum && (msg.type() == raftpb::MsgHeartbeat || msg.type() == raftpb::MsgApp)){
+            raftpb::Message tmsg;
+            tmsg.set_to(msg.from());
+            tmsg.set_type(raftpb::MsgAppResp);
+            this->send(tmsg);
+        }
+        else{
+            LOGV(shapphiredb::ERROR_LEVEL, this->logger, "%d in term: %d receive a %s message from %d at term: %d",
+                this->_id, this->_currentTerm, msg.type(), msg.from(), msg.term());
+        }
+        return;
+    }
+
+    switch(msg.type()){
+        case raftpb::MsgVote:
+            {
+                if(((0 == this->_vote) || (this->_vote = msg.from())) &&
+                        (msg.logterm() > this->_commitIndex ||
+                         (msg.logterm() == this->_commitIndex &&
+                          msg.index() >= this->_lastApplied))){
+                    LOGV(shapphiredb::INFO_LEVEL, this->logger, "%d rejected msgApp [logterm: %d, index: %d] from %d",
+                            this->_id, msg.logterm(), msg.index(), msg.from());
+                    raftpb::Message tmsg;
+                    tmsg.set_to(msg.from());
+                    tmsg.set_term(msg.term());
+                    tmsg.set_type(raftpb::MsgVoteResp);
+                    this->send(tmsg);
+                    this->_electionElapsed = 0;
+                    this->_vote = msg.from();
+                }
+                else{
+                    LOGV(shapphiredb::INFO_LEVEL, this->logger, "%d rejected msgApp [logterm: %d, index: %d] from %d",
+                            this->_id, msg.logterm(), msg.index(), msg.from());
+                    raftpb::Message tmsg;
+                    tmsg.set_to(msg.from());
+                    tmsg.set_term(msg.term());
+                    tmsg.set_type(raftpb::MsgVoteResp);
+                    tmsg.set_reject(true);
+                    this->send(tmsg);
+                    this->_electionElapsed = 0;
+                    this->_vote = msg.from();
+                }
+                break;
+            }
+        default:
+            this->_step(this, msg);
+    }
+}

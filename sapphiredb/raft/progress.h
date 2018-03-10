@@ -1,11 +1,19 @@
 #ifndef SAPPHIREDB_RAFT_PROGRESS_H_
 #define SAPPHIREDB_RAFT_PROGRESS_H_
 
-//namespace sapphiredb
-//{
-//namespace rafe
-//{
-typedef ProgressStateType uint64_t;
+#include <iostream>
+
+namespace sapphiredb
+{
+namespace raft
+{
+typedef uint64_t ProgressStateType;
+
+enum{
+    ProgressStateSnapshot = 1,
+    ProgressStateProbe,
+    ProgressStateReplicate
+};
 
 class Progress{
 private:
@@ -21,13 +29,19 @@ private:
 
     bool _isLeader;
 public:
+    ProgressStateType getState();
     void resetState(ProgressStateType state);
     void setRecentActive();
     void resetRecentActive();
     uint64_t getMatch();
     uint64_t getNext();
+    void optimisticUpdate(uint64_t n);
+
+    void becomeProbe();
+    void becomeReplicate();
+    void becomeSnapshot(uint64_t snapshoti);
 };
-//} //namespace raft
-//} //namespace sapphiredb
+} //namespace raft
+} //namespace sapphiredb
 
 #endif

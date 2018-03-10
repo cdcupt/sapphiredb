@@ -262,13 +262,15 @@ void AddDescriptorsImpl() {
       "\n\010snapshot\030\t \001(\0132\020.raftpb.Snapshot\022\016\n\006re"
       "ject\030\n \001(\010\022\022\n\nrejectHint\030\013 \001(\004\022\017\n\007contex"
       "t\030\014 \001(\014*1\n\tEntryType\022\017\n\013EntryNormal\020\000\022\023\n"
-      "\017EntryConfChange\020\001*n\n\013MessageType\022\020\n\014Msg"
-      "Heartbeat\020\000\022\023\n\017MsgHeatbeatResp\020\001\022\013\n\007MsgV"
-      "ote\020\002\022\017\n\013MsgVoteResp\020\003\022\n\n\006MsgApp\020\004\022\016\n\nMs"
-      "gAppResp\020\005b\006proto3"
+      "\017EntryConfChange\020\001*\263\001\n\013MessageType\022\020\n\014Ms"
+      "gHeartbeat\020\000\022\024\n\020MsgHeartbeatResp\020\001\022\013\n\007Ms"
+      "gVote\020\002\022\017\n\013MsgVoteResp\020\003\022\n\n\006MsgApp\020\004\022\016\n\n"
+      "MsgAppResp\020\005\022\n\n\006MsgHup\020\006\022\022\n\016MsgCheckQuor"
+      "um\020\007\022\025\n\021MsgTransferLeader\020\010\022\013\n\007MsgSnap\020\t"
+      "b\006proto3"
   };
   ::google::protobuf::DescriptorPool::InternalAddGeneratedFile(
-      descriptor, 738);
+      descriptor, 808);
   ::google::protobuf::MessageFactory::InternalRegisterGeneratedFile(
     "raftpb.proto", &protobuf_RegisterTypes);
 }
@@ -311,6 +313,10 @@ bool MessageType_IsValid(int value) {
     case 3:
     case 4:
     case 5:
+    case 6:
+    case 7:
+    case 8:
+    case 9:
       return true;
     default:
       return false;

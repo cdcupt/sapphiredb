@@ -31,11 +31,15 @@ message Snapshot {
 
 enum MessageType {
     MsgHeartbeat = 0;
-    MsgHeatbeatResp = 1;
+    MsgHeartbeatResp = 1;
     MsgVote = 2;
     MsgVoteResp = 3;
     MsgApp = 4;
     MsgAppResp = 5;
+    MsgHup = 6;
+    MsgCheckQuorum = 7;
+    MsgTransferLeader = 8;
+    MsgSnap = 9;
 }
 
 message Message {

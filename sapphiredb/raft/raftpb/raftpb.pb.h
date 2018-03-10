@@ -103,17 +103,21 @@ inline bool EntryType_Parse(
 }
 enum MessageType {
   MsgHeartbeat = 0,
-  MsgHeatbeatResp = 1,
+  MsgHeartbeatResp = 1,
   MsgVote = 2,
   MsgVoteResp = 3,
   MsgApp = 4,
   MsgAppResp = 5,
+  MsgHup = 6,
+  MsgCheckQuorum = 7,
+  MsgTransferLeader = 8,
+  MsgSnap = 9,
   MessageType_INT_MIN_SENTINEL_DO_NOT_USE_ = ::google::protobuf::kint32min,
   MessageType_INT_MAX_SENTINEL_DO_NOT_USE_ = ::google::protobuf::kint32max
 };
 bool MessageType_IsValid(int value);
 const MessageType MessageType_MIN = MsgHeartbeat;
-const MessageType MessageType_MAX = MsgAppResp;
+const MessageType MessageType_MAX = MsgSnap;
 const int MessageType_ARRAYSIZE = MessageType_MAX + 1;
 
 const ::google::protobuf::EnumDescriptor* MessageType_descriptor();

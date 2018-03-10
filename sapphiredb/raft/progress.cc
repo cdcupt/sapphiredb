@@ -1,44 +1,52 @@
 #include "progress.h"
 
-void Progress::resetState(ProgressStateType state){
-    this._pendingSnapshot = 0;
-    this._state = state;
+sapphiredb::raft::ProgressStateType sapphiredb::raft::Progress::getState(){
+    return this->_state;
 }
 
-void Progress::becomeProbe(){
-    if(this._state == ProgressStateSnapshot){
-        uint64_t tmpPendingSnapshot = this._pendingSnapshot;
-        this.resetState(ProgressStateProbe);
-        this._next = max(this._match+1, tmpPendingSnapshot+1);
+void sapphiredb::raft::Progress::resetState(sapphiredb::raft::ProgressStateType state){
+    this->_pendingSnapshot = 0;
+    this->_state = state;
+}
+
+void sapphiredb::raft::Progress::becomeProbe(){
+    if(this->_state == ProgressStateSnapshot){
+        uint64_t tmpPendingSnapshot = this->_pendingSnapshot;
+        this->resetState(ProgressStateProbe);
+        this->_next = ::std::max(this->_match+1, tmpPendingSnapshot+1);
     }
     else{
-        this.resetState(ProgressStateProbe);
-        this._next = this._match+1;
+        this->resetState(ProgressStateProbe);
+        this->_next = this->_match+1;
     }
 }
 
-void Progress::becomeReplicate(){
-    this.resetState(ProgressStateReplicate);
-    this._next = this._match+1;
+void sapphiredb::raft::Progress::becomeReplicate(){
+    this->resetState(ProgressStateReplicate);
+    this->_next = this->_match+1;
 }
 
-void Progress::becomeSnapshot(uint64_t snapshoti){
-    this.resetState(ProgressStateSnapshot);
-    this._pendingSnapshot = snapshoti;
+void sapphiredb::raft::Progress::becomeSnapshot(uint64_t snapshoti){
+    this->resetState(ProgressStateSnapshot);
+    this->_pendingSnapshot = snapshoti;
 }
 
-void Progress::setRecentActive(){
-    this._recentActive = true;
+void sapphiredb::raft::Progress::setRecentActive(){
+    this->_recentActive = true;
 }
 
-void Progress::resetRecentActive(){
-    this._recentActive = false;
+void sapphiredb::raft::Progress::resetRecentActive(){
+    this->_recentActive = false;
 }
 
-uint64_t Progress::getMatch(){
-    return this._match;
+uint64_t sapphiredb::raft::Progress::getMatch(){
+    return this->_match;
 }
 
-uint64_t Progress::getNext(){
-    return this._next;
+uint64_t sapphiredb::raft::Progress::getNext(){
+    return this->_next;
+}
+
+void sapphiredb::raft::Progress::optimisticUpdate(uint64_t n){
+    this->_next = n+1;
 }
