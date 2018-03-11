@@ -4,9 +4,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <assert.h>
-#include "common/PikaLabs/floyd/include/floyd_options.h"
+#include "common/PikaLads/floyd/floyd/include/floyd_options.h"
 
-#include "common/PikaLabs/shaslash/include/env.h"
+#include "common/PikaLads/slash/slash/include/env.h"
 
 namespace shapphiredb {
 

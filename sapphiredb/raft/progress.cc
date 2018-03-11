@@ -1,4 +1,4 @@
-#include "progress.h"
+#include "raft/progress.h"
 
 sapphiredb::raft::ProgressStateType sapphiredb::raft::Progress::getState(){
     return this->_state;
