@@ -602,3 +602,18 @@ void sapphiredb::raft::Raft::generalStep(raftpb::Message msg){
             this->_step(this, msg);
     }
 }
+
+sapphiredb::raft::Raft::Raft(uint64_t id, ::std::string path, uint32_t heartbeatTimeout, uint32_t electionTimeout) :
+    _currentTerm(0), _vote(0), _id(id), _leader(0), isLeader(false), _state(sapphiredb::raft::STATE_FOLLOWER), _commitIndex(0), _lastApplied(0),
+    _heartbeatElapsed(0), _heartbeatTimeout(heartbeatTimeout), _electionTimeout(electionTimeout), _electionElapsed(0),
+    _step(sapphiredb::raft::stepFollower), _tick(sapphiredb::raft::tickElection), _checkQuorum(false){
+
+    FILE* log = fopen(path.c_str(), "w");
+    this->logger = new shapphiredb::Logger(log);
+
+    this->resetRandomizedElectionTimeout();
+}
+
+sapphiredb::raft::Raft::~Raft(){
+    delete this->logger;
+}

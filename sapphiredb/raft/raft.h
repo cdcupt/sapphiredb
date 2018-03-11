@@ -10,6 +10,7 @@
 #include <ctime>
 #include <iostream>
 #include <string>
+#include <cstdio>
 
 #include "raft/progress.h"
 #include "raft/raftpb/raftpb.pb.h"
@@ -131,7 +132,7 @@ private:
     uint64_t tryAppend(const uint64_t& index, const uint64_t& logTerm, const uint64_t& committed, const ::std::vector<Entrie>& ents);
 
 public:
-    Raft();
+    Raft(uint64_t id, ::std::string path = "../raft_log", uint32_t heartbeatTimeout = 10, uint32_t electionTimeout = 150);
     ~Raft();
 
     friend void stepLeader(sapphiredb::raft::Raft* r, raftpb::Message msg);
