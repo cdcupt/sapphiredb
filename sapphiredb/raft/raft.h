@@ -14,7 +14,7 @@
 
 #include "raft/progress.h"
 #include "raft/raftpb/raftpb.pb.h"
-#include "common/logger.h"
+#include "spdlog/include/spdlog/spdlog.h"
 
 #define LONG_CXX11
 
@@ -80,7 +80,7 @@ private:
     uint64_t _vote;
     uint64_t _id;
     bool isLeader;
-    shapphiredb::Logger* logger;
+    std::shared_ptr<spdlog::logger> logger;
     ::std::vector<Entrie> _entries;
     //prs represents all follower's progress in the view of the leader.
     ::std::unordered_map<uint64_t, Progress> _prs;
