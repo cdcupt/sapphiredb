@@ -48,7 +48,12 @@ void sapphiredb::raft::tickElection(sapphiredb::raft::Raft* r){
         raftpb::Message msg;
         msg.set_from(r->_id);
         msg.set_type(raftpb::MsgHup);
-        r->generalStep(msg);
+        try{
+            r->generalStep(msg);
+        }
+        catch(...){
+            r->logger->error("generalStep filed in term %d", r->_currentTerm);
+        }
     }
 }
 
@@ -63,7 +68,12 @@ void sapphiredb::raft::tickHeartbeat(sapphiredb::raft::Raft* r){
             raftpb::Message msg;
             msg.set_from(r->_id);
             msg.set_type(raftpb::MsgCheckQuorum);
-            r->generalStep(msg);
+            try{
+                r->generalStep(msg);
+            }
+            catch(...){
+                r->logger->error("generalStep filed in term %d", r->_currentTerm);
+            }
         }
 
         //TODO leader transfer
@@ -77,7 +87,12 @@ void sapphiredb::raft::tickHeartbeat(sapphiredb::raft::Raft* r){
         raftpb::Message msg;
         msg.set_from(r->_id);
         msg.set_type(raftpb::MsgHeartbeat);
-        r->generalStep(msg);
+        try{
+            r->generalStep(msg);
+        }
+        catch(...){
+            r->logger->error("generalStep filed in term %d", r->_currentTerm);
+        }
     }
 }
 
@@ -599,7 +614,13 @@ void sapphiredb::raft::Raft::generalStep(raftpb::Message msg){
                 break;
             }
         default:
-            this->_step(this, msg);
+            try{
+                this->_step(this, msg);
+            }
+            catch(...){
+                logger->error("step filed in term %d", this->_currentTerm);
+                return;
+            }
     }
 }
 
@@ -610,7 +631,7 @@ sapphiredb::raft::Raft::Raft(uint64_t id, ::std::string path, uint32_t heartbeat
 
     try{
         FILE* log = fopen(path.c_str(), "w");
-        this->logger = spdlog::stdout_color_mt("logger");;
+        this->logger = spdlog::basic_logger_mt("logger", "raft_log");
 
         this->resetRandomizedElectionTimeout();
     }
@@ -620,5 +641,10 @@ sapphiredb::raft::Raft::Raft(uint64_t id, ::std::string path, uint32_t heartbeat
 }
 
 sapphiredb::raft::Raft::~Raft(){
-    //TODO
+    try{
+        spdlog::drop_all();
+    }
+    catch(...){
+        ::std::abort();
+    }
 }

@@ -14,7 +14,7 @@
 
 #include "raft/progress.h"
 #include "raft/raftpb/raftpb.pb.h"
-#include "spdlog/include/spdlog/spdlog.h"
+#include "common/spdlog/include/spdlog/spdlog.h"
 
 #define LONG_CXX11
 
