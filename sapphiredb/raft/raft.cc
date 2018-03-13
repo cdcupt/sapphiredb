@@ -3,7 +3,7 @@
 uint32_t rand(uint32_t min, uint32_t max, uint32_t seed = 0)
 {
     static std::default_random_engine e(seed);
-    static std::uniform_real_distribution<uint32_t> u(min, max);
+    static std::uniform_real_distribution<double> u(min, max);
     return u(e);
 }
 
