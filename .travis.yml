@@ -23,7 +23,6 @@ matrix:
         - MATRIX_EVAL="brew install gcc && CC=gcc-7 && CXX=g++-7"
 
 before_install:
-    - eval "${MATRIX_EVAL}"
     - brew update # see note below
     - brew install beanstalk
     - brew install protobuf
