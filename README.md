@@ -1,7 +1,7 @@
 ## SapphireDB
+[![Build Status](https://travis-ci.org/cdcupt/sapphiredb.svg?branch=master)](https://travis-ci.org/cdcupt/sapphiredb)
 ----------
 A distributed metafile system
-[![Build Status](https://travis-ci.org/cdcupt/sapphiredb.svg?branch=master)](https://travis-ci.org/cdcupt/sapphiredb)
 ----------
 ## Getting Started
 ### Download
