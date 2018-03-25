@@ -84,6 +84,7 @@ void sapphiredb::raft::tickHeartbeat(sapphiredb::raft::Raft* r){
     }
     if(r->_heartbeatElapsed >= r->_heartbeatTimeout){
         r->_heartbeatElapsed = 0;
+        ++r->_lockingElapsed;
         raftpb::Message msg;
         msg.set_from(r->_id);
         msg.set_type(raftpb::MsgHeartbeat);
@@ -93,6 +94,11 @@ void sapphiredb::raft::tickHeartbeat(sapphiredb::raft::Raft* r){
         catch(...){
             r->logger->error("generalStep filed in term %d", r->_currentTerm);
         }
+    }
+    if(r->_lockingElapsed >= r->_lockingTimeout){
+        r->forEachProgress(r->_prs, [&r](sapphiredb::raft::Raft* _, uint64_t id, Progress& __){
+            r->addNode(id);
+        });
     }
 }
 
@@ -123,9 +129,19 @@ void sapphiredb::raft::Raft::becomeLeader(){
     logger->warn("id : %d from candidate change to leader in term %d.", this->_id, this->_currentTerm);
 }
 
+void sapphiredb::raft::Raft::becomeLocking(){
+    this->_step = sapphiredb::raft::stepLocking;
+    this->_tick = sapphiredb::raft::tickHeartbeat;
+    this->_state = STATE_LOCKING;
+
+    logger->warn("id : %d in locking.", this->_id);
+}
+
 uint32_t sapphiredb::raft::Raft::quorum(){
     return (this->prs.size())/2+1;
 }
+
+//TODO stepLocking
 
 void sapphiredb::raft::stepLeader(sapphiredb::raft::Raft* r, raftpb::Message msg){
     switch(msg.type()){
@@ -470,7 +486,7 @@ void sapphiredb::raft::Raft::forEachProgress(::std::unordered_map<uint64_t, Prog
     }
 #else
     for(::std::unordered_map<uint64_t, int32_t>::iterator it = prs.begin(); it!=prs.end(); ++it){
-        func(it->first, it->second);
+        func(this, it->first, it->second);
     }
 #endif
 }
@@ -622,6 +638,28 @@ void sapphiredb::raft::Raft::generalStep(raftpb::Message msg){
                 return;
             }
     }
+}
+
+void sapphiredb::raft::Raft::addNode(uint64_t to){
+    raftpb::Message msg;
+    msg.set_type(raftpb::MsgNode);
+    msg.set_from(this->_id);
+    msg.set_to(to);
+
+    this->send(msg);
+}
+
+void sapphiredb::raft::Raft::tickNode(){
+    _tick(this);
+}
+
+void sapphiredb::raft::Raft::stepNode(raftpb::Message& msg){
+    _step(this, msg);
+}
+
+void sapphiredb::raft::Raft::stop(){
+    this->becomeLocking();
+    //TODO unsafety
 }
 
 sapphiredb::raft::Raft::Raft(uint64_t id, ::std::string path, uint32_t heartbeatTimeout, uint32_t electionTimeout) :

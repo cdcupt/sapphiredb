@@ -11,6 +11,7 @@
 #include <iostream>
 #include <string>
 #include <cstdio>
+#include <queue>
 
 #include "raft/progress.h"
 #include "raft/raftpb/raftpb.pb.h"
@@ -26,7 +27,8 @@ namespace raft
 enum State{
     STATE_LEADER = 1,
     STATE_CANDIDATE = 2,
-    STATE_FOLLOWER  =3
+    STATE_FOLLOWER  =3,
+    STATE_LOCKING = 4
 };
 
 uint32_t rand(uint32_t min, uint32_t max, uint32_t seed = 0);
@@ -66,6 +68,7 @@ public:
 void stepLeader(sapphiredb::raft::Raft* r, raftpb::Message msg);
 void stepCandidate(sapphiredb::raft::Raft* r, raftpb::Message msg);
 void stepFollower(sapphiredb::raft::Raft* r, raftpb::Message msg);
+void stepLocking(sapphiredb::raft::Raft* r, raftpb::Message msg);
 
 void tickElection(sapphiredb::raft::Raft* r);
 void tickHeartbeat(sapphiredb::raft::Raft* r);
@@ -102,8 +105,12 @@ private:
     uint32_t _electionElapsed;
     uint32_t _electionTimeout;
 
+    //locking timer
+    uint32_t _lockingElapsed;
+    uint32_t _lockingTimeout;
+
     //func interface
-    ::std::function<void(sapphiredb::raft::Raft*, raftpb::Message msg)> _step;
+    ::std::function<void(sapphiredb::raft::Raft* r, raftpb::Message msg)> _step;
     ::std::function<void(sapphiredb::raft::Raft* r)> _tick;
 
     //random election time
@@ -111,9 +118,6 @@ private:
 
     //check quorum
     bool _checkQuorum;
-
-    //message box
-    ::std::vector<raftpb::Message> _msgs;
 
     void resetRandomizedElectionTimeout();
     void reset(uint64_t term);
@@ -138,6 +142,7 @@ public:
     friend void stepLeader(sapphiredb::raft::Raft* r, raftpb::Message msg);
     friend void stepCandidate(sapphiredb::raft::Raft* r, raftpb::Message msg);
     friend void stepFollower(sapphiredb::raft::Raft* r, raftpb::Message msg);
+    friend void stepLocking(sapphiredb::raft::Raft* r, raftpb::Message msg);
 
     friend void tickElection(sapphiredb::raft::Raft* r);
     friend void tickHeartbeat(sapphiredb::raft::Raft* r);
@@ -145,6 +150,7 @@ public:
     void stepDown(uint64_t term, uint64_t leader);
     void becomeCandidate();
     void becomeLeader();
+    void becomeLocking();
 
     //two main RPC
     ::std::pair<uint64_t, bool> sendAppend(uint64_t term, uint64_t id, uint64_t preLogIndex,
@@ -157,6 +163,18 @@ public:
 
     void bcastHeartbeat();
     void bcastAppend();
+
+    //general API
+    void tickNode();
+    void stepNode(raftpb::Message& msg);
+
+    void addNode(uint64_t to);
+
+    void stop();
+
+    //message box
+    ::std::vector<raftpb::Message> _msgs;
+    ::std::queue<raftpb::Message> _recvmsgs;
 };
 } //namespace raft
 } //namespace sapphiredb

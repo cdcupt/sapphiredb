@@ -40,6 +40,7 @@ enum MessageType {
     MsgCheckQuorum = 7;
     MsgTransferLeader = 8;
     MsgSnap = 9;
+    MsgNode = 10;
 }
 
 message Message {
