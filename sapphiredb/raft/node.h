@@ -6,6 +6,7 @@
 
 #include "raft/raft.h"
 #include "common/thread_pool.h"
+#include "common/uniqueid.h"
 
 #define LONG_CXX11
 
@@ -28,6 +29,7 @@ typedef struct{
 class Node{
 private:
     Raft* raft;
+    common::Uniqueid* uid;
     ::std::shared_ptr<spdlog::logger> logger;
 
     void init(Config& conf);

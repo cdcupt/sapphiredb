@@ -2,12 +2,13 @@
 
 sapphiredb::raft::Node::Node(Config& conf, ::std::string log){
     try{
+        uid = &common::Uniqueid::Instance();
         if(conf.timeout == nullptr && conf.raftlog.empty()){
-            this->raft = new Raft(conf.id);
+            this->raft = new Raft(uid->getUniqueid());
             this->init(conf);
         }
         else{
-            this->raft = new Raft(conf.id, conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->heartbeatTimeout);
+            this->raft = new Raft(uid->getUniqueid(), conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->heartbeatTimeout);
             this->init(conf);
         }
 
@@ -20,12 +21,13 @@ sapphiredb::raft::Node::Node(Config& conf, ::std::string log){
 
 sapphiredb::raft::Node::Node(Config&& conf, ::std::string log){
     try{
+        uid = &common::Uniqueid::Instance();
         if(conf.timeout == nullptr && conf.raftlog.empty()){
-            this->raft = new Raft(conf.id);
+            this->raft = new Raft(uid->getUniqueid());
             this->init(conf);
         }
         else{
-            this->raft = new Raft(conf.id, conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->heartbeatTimeout);
+            this->raft = new Raft(uid->getUniqueid(), conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->heartbeatTimeout);
             this->init(conf);
         }
 
@@ -39,6 +41,7 @@ sapphiredb::raft::Node::Node(Config&& conf, ::std::string log){
 sapphiredb::raft::Node::~Node(){
     try{
         raft->stop();
+        delete uid;
         delete raft;
     }
     catch(...){
