@@ -18,4 +18,4 @@ make
 SapphireDB is a distributed storage engine. Why is it called sapphire, because sapphire is a symbol of nobility. I also hope that this system will be as unique as sapphire.
 This system consists of several parts, namely the log library, the thread library, the network library, the consistency library, and the underlying kv engine. The consistency library and the kv engine belong to the top-level dependencies, and the kv engine also depends on the consistency library to provide highly reliable services. Here is a brief description of the structure, others will be described in detail in the wiki.
 ### Structure
-![image](https://photos.google.com/photo/AF1QipM_-bvTy04eUIFWhYLLH0KO5-N_hs6woHGQ5qw1)
+![structure](http://github.com/cdcupt/sapphiredb/raw/master/structure/structure.jpg)
