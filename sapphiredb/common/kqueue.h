@@ -39,7 +39,6 @@ private:
 
     int32_t epollfd;
     int32_t listenfd;
-    struct sockaddr_in sockaddr;
     int32_t rbind;
     ::std::mutex buf_mutex;
 
@@ -51,14 +50,14 @@ private:
     void handleWrite(int32_t efd, int32_t fd);
     void kqueue_loop_once(int32_t efd, int32_t lfd, int32_t waitms);
 public:
-    Kqueue();
-    ~Kqueue();
+    Kqueue(::std::string addr, uint32_t port, NetType type, uint32_t bufsize, uint32_t fdsize, uint32_t listenq);
+    virtual ~Kqueue();
 
     virtual void send() override;
     virtual void recv() override;
     virtual void loop_once(uint32_t waitms) override;
 };
-}
-}
+} // namespace common
+} // namespace sapphiredb
 
 #endif

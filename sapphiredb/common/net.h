@@ -41,7 +41,7 @@ protected:
     ::std::string _addr_ipv6;
 public:
     Netcon(::std::string addr, uint32_t port, NetType type, uint32_t bufsize);
-    ~Netcon();
+    virtual ~Netcon();
 
     virtual void send() = 0;
     virtual void recv() = 0;

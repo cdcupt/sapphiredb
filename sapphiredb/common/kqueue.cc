@@ -57,7 +57,7 @@ void sapphiredb::common::Kqueue::handleRead(int32_t efd, int32_t fd) {
     char buf[4096];
     int32_t n = 0;
     for(;;){
-        while ((n=::read(fd, buf, sizeof buf)) > 0) {
+        while ((n=::read(fd, buf, sizeof(buf))) > 0) {
             if(n+this->recvbuf->size > this->recvbuf->len){
                 //TODO error log
                 ::std::cerr << "buf is really fill!" << ::std::endl;
@@ -82,6 +82,7 @@ void sapphiredb::common::Kqueue::handleRead(int32_t efd, int32_t fd) {
         }
         exit_if(n<0, "read error");
     }
+    updateEvents(efd, fd, KQUEUE_READ_EVENT, true);
 }
 
 void sapphiredb::common::Kqueue::handleWrite(int32_t efd, int32_t fd) {
@@ -144,4 +145,31 @@ void sapphiredb::common::Kqueue::recv(){
 
 void sapphiredb::common::Kqueue::loop_once(uint32_t waitms){
     kqueue_loop_once(this->epollfd, this->listenfd, waitms);
+}
+
+sapphiredb::common::Kqueue::Kqueue(::std::string addr, uint32_t port, NetType type, uint32_t bufsize, uint32_t fdsize, uint32_t listenq)
+    : Netcon(addr, port, type, bufsize){
+    ::signal(SIGPIPE, SIG_IGN);
+    try{
+        this->epollfd = kqueue();
+        this->listenfd = socket(AF_INET, SOCK_STREAM, 0);
+
+        struct sockaddr_in addr;
+        memset(&addr, 0, sizeof addr);
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(port);
+        addr.sin_addr.s_addr = INADDR_ANY;
+
+        this->rbind = ::bind(listenfd,(struct sockaddr *)&addr, sizeof(struct sockaddr));
+        this->rbind = listen(listenfd, listenq);
+        this->setNonBlock(this->listenfd);
+        this->updateEvents(epollfd, listenfd, KQUEUE_READ_EVENT, false);
+    }
+    catch(...){
+        ::std::cerr << "epoll alloc fd error" << ::std::endl;
+    }
+}
+
+sapphiredb::common::Kqueue::~Kqueue(){
+    close(this->epollfd);
 }
