@@ -39,7 +39,22 @@ void sapphiredb::common::Kqueue::delete_event(int32_t efd, int32_t fd, int32_t e
     exit_if(r, "kevent failed ");
 }
 
+void sapphiredb::common::Kqueue::connecttopeer(::std::string&& ip, uint32_t port, uint64_t id) {
+    struct sockaddr_in servaddr;
+    int32_t sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    bzero(&servaddr, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(port);
+    inet_pton(AF_INET, ip.c_str(), &servaddr.sin_addr);
+    bind(sockfd,(struct sockaddr *)&servaddr, sizeof(struct sockaddr));
+    connect(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr));
+    if(id == 0) unknownfd.insert(sockfd);
+    else peersfd[id] = sockfd;
+    handleConnect(this->epollfd, sockfd);
+}
+
 void sapphiredb::common::Kqueue::handleAccept(int32_t efd, int32_t fd) {
+    //::std::cout << "****handleAccept****" << ::std::endl;
     struct sockaddr_in raddr;
     socklen_t rsz = sizeof(raddr);
     int32_t cfd = accept(fd,(struct sockaddr *)&raddr,&rsz);
@@ -49,29 +64,35 @@ void sapphiredb::common::Kqueue::handleAccept(int32_t efd, int32_t fd) {
     int32_t r = getpeername(cfd, reinterpret_cast<struct sockaddr *>(&peer), &alen);
     exit_if(r<0, "getpeername failed");
     printf("accept a connection from %s\n", inet_ntoa(raddr.sin_addr));
+    unknownfd.insert(cfd);
     setNonBlock(cfd);
     updateEvents(efd, cfd, KQUEUE_READ_EVENT|KQUEUE_WRITE_EVENT, false);
 }
 
 void sapphiredb::common::Kqueue::handleRead(int32_t efd, int32_t fd) {
+    //::std::cout << "****handleRead****" << ::std::endl;
     char buf[4096];
     int32_t n = 0;
     for(;;){
         while ((n=::read(fd, buf, sizeof(buf))) > 0) {
-            if(n+this->recvbuf->size > this->recvbuf->len){
+            if(n+this->recvbuf->len > this->recvbuf->size){
                 //TODO error log
-                ::std::cerr << "buf is really fill!" << ::std::endl;
+                //::std::cerr << "buf is really fill!" << ::std::endl;
+                //::std::cerr << "size: " << this->recvbuf->size << "len: " << this->recvbuf->len << ::std::endl;
                 return;
             }
             else{
-                this->recvbuf->buf->append(static_cast<::std::string>(buf));
+                ::std::lock_guard<::std::mutex> lock(this->buf_mutex);
+                int j = this->recvbuf->len;
+                for(int i=0; buf[i]!='\0'; ++i){
+                    (*(this->recvbuf->buf))[j++] = buf[i];
+                }
+                this->recvbuf->len += n;
             }
-            //int32_t r = ::write(fd, buf, n); //写出读取的数据
-            //实际应用中，写出数据可能会返回EAGAIN，此时应当监听可写事件，当可写时再把数据写出
-            //exit_if(r<=0, "write error");
         }
         if(n == 0){
             //TODO error log
+            delete_event(efd, fd, KQUEUE_READ_EVENT);
             ::std::cerr << "socket closed!" << ::std::endl;
             return;
         }
@@ -82,30 +103,42 @@ void sapphiredb::common::Kqueue::handleRead(int32_t efd, int32_t fd) {
         }
         exit_if(n<0, "read error");
     }
-    updateEvents(efd, fd, KQUEUE_READ_EVENT, true);
 }
 
 void sapphiredb::common::Kqueue::handleWrite(int32_t efd, int32_t fd) {
-    std::lock_guard<std::mutex> guard(this->buf_mutex);
-    ::std::string buf = ::std::move(*(this->recvbuf->buf));
+    //::std::cout << "****handleWrite****" << ::std::endl;
+    ::std::lock_guard<std::mutex> guard(this->buf_mutex);
+    ::std::string buf = ::std::move(*(this->sendbuf->buf));
     for(;;){
-        int32_t r = ::write(fd, buf.c_str(), buf.size()); //写出读取的数据
+        
+        int32_t r = ::write(fd, buf.c_str(), this->sendbuf->len); //写出读取的数据
         if(r<0 && (errno == EAGAIN || errno == EINTR)){
+            ::std::cout << "EAGAIN OR EINTR?" << ::std::endl;
             continue;
         }
         else if(r == 0){
             //TODO error log
+            delete_event(efd, fd, KQUEUE_WRITE_EVENT);
             ::std::cerr << "socket closed!" << ::std::endl;
             return;
         }
         else if(r < 0){
+            delete_event(efd, fd, KQUEUE_WRITE_EVENT);
             ::std::cerr << "write error" << ::std::endl;
+            return;
+        }
+        else{
+            this->sendbuf->len -= r;
+            if(this->sendbuf->len == 0) break;
         }
     }
-    //实际应用中，写出数据可能会返回EAGAIN，此时应当监听可写事件，当可写时再把数据写出
-    //exit_if(r<=0, "write error");
-    //实际应用应当实现可写时写出数据，无数据可写才关闭可写事件
-    updateEvents(efd, fd, KQUEUE_READ_EVENT, true);
+    delete_event(efd, fd, KQUEUE_WRITE_EVENT);
+}
+
+void sapphiredb::common::Kqueue::handleConnect(int32_t efd, int32_t fd) {
+    //::std::cout << "****handleConnect****" << ::std::endl;
+    setNonBlock(fd);
+    updateEvents(efd, fd, KQUEUE_READ_EVENT, false);
 }
 
 void sapphiredb::common::Kqueue::kqueue_loop_once(int32_t efd, int32_t lfd, int32_t waitms) {
@@ -115,7 +148,6 @@ void sapphiredb::common::Kqueue::kqueue_loop_once(int32_t efd, int32_t lfd, int3
     const int32_t kMaxEvents = 20;
     struct kevent activeEvs[kMaxEvents];
     int32_t n = kevent(efd, NULL, 0, activeEvs, kMaxEvents, &timeout);
-    printf("kqueue return %d\n", n);
     for (int32_t i = 0; i < n; i ++) {
         int32_t fd = (int32_t)(intptr_t)activeEvs[i].udata;
         int32_t events = activeEvs[i].filter;
@@ -133,22 +165,46 @@ void sapphiredb::common::Kqueue::kqueue_loop_once(int32_t efd, int32_t lfd, int3
     }
 }
 
-void sapphiredb::common::Kqueue::send(){
-    if(!this->empty()){
-        updateEvents(this->epollfd, this->listenfd, KQUEUE_WRITE_EVENT, false);
+void sapphiredb::common::Kqueue::send(uint64_t id){
+    if(this->sendbuf->len > 0){
+        if(id == 0){
+            for(auto ufd : unknownfd){
+                updateEvents(this->epollfd, ufd, KQUEUE_WRITE_EVENT, false);
+            }
+        }
+        else{
+            updateEvents(this->epollfd, peersfd[id], KQUEUE_WRITE_EVENT, false);
+        }
     }
 }
 
-void sapphiredb::common::Kqueue::recv(){
-    updateEvents(this->epollfd, this->listenfd, KQUEUE_READ_EVENT, false);
+void sapphiredb::common::Kqueue::recv(uint64_t id){
+    if(id == 0){
+        for(auto ufd : unknownfd){
+            updateEvents(this->epollfd, ufd, KQUEUE_READ_EVENT, false);
+        }
+    }
+    else{
+        updateEvents(this->epollfd, peersfd[id], KQUEUE_READ_EVENT, false);
+    }
+}
+
+void sapphiredb::common::Kqueue::conn(::std::string&& ip, uint32_t port, uint64_t id){
+    connecttopeer(std::forward<::std::string>(ip), port, id);
 }
 
 void sapphiredb::common::Kqueue::loop_once(uint32_t waitms){
     kqueue_loop_once(this->epollfd, this->listenfd, waitms);
 }
 
-sapphiredb::common::Kqueue::Kqueue(::std::string addr, uint32_t port, NetType type, uint32_t bufsize, uint32_t fdsize, uint32_t listenq)
-    : Netcon(addr, port, type, bufsize){
+void sapphiredb::common::Kqueue::listenp(uint32_t listenq){
+    listen(this->listenfd, listenq);
+    this->setNonBlock(this->listenfd);
+    this->updateEvents(this->epollfd, this->listenfd, KQUEUE_READ_EVENT, false);
+}
+
+sapphiredb::common::Kqueue::Kqueue(::std::string ip, uint32_t port, NetType type, uint32_t bufsize, uint32_t fdsize, uint32_t listenq)
+    : Netcon(ip, port, type, bufsize){
     ::signal(SIGPIPE, SIG_IGN);
     try{
         this->epollfd = kqueue();
@@ -158,12 +214,9 @@ sapphiredb::common::Kqueue::Kqueue(::std::string addr, uint32_t port, NetType ty
         memset(&addr, 0, sizeof addr);
         addr.sin_family = AF_INET;
         addr.sin_port = htons(port);
-        addr.sin_addr.s_addr = INADDR_ANY;
+        inet_pton(AF_INET, ip.c_str(), &addr.sin_addr);
 
-        this->rbind = ::bind(listenfd,(struct sockaddr *)&addr, sizeof(struct sockaddr));
-        this->rbind = listen(listenfd, listenq);
-        this->setNonBlock(this->listenfd);
-        this->updateEvents(epollfd, listenfd, KQUEUE_READ_EVENT, false);
+        this->rbind = bind(listenfd,(struct sockaddr *)&addr, sizeof(struct sockaddr));
     }
     catch(...){
         ::std::cerr << "epoll alloc fd error" << ::std::endl;
@@ -171,5 +224,12 @@ sapphiredb::common::Kqueue::Kqueue(::std::string addr, uint32_t port, NetType ty
 }
 
 sapphiredb::common::Kqueue::~Kqueue(){
+    close(this->listenfd);
     close(this->epollfd);
+    for(auto peerfd : this->peersfd){
+        close(peerfd.second);
+    }
+    for(auto ufd : this->unknownfd){
+        close(ufd);
+    }
 }

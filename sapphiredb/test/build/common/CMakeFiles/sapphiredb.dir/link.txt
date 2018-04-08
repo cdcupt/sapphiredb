@@ -1,0 +1,1 @@
+/Library/Developer/CommandLineTools/usr/bin/c++   -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/sapphiredb.dir/main.cc.o  -o sapphiredb common/libcommon.a -pthread -std=c++11 

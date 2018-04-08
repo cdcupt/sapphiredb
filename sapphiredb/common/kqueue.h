@@ -14,6 +14,10 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <vector>
+#include <set>
+#include <unordered_map>
+#include <utility>
 #include "common/net.h"
 
 #define exit_if(r, ...) if(r) {printf(__VA_ARGS__); printf("error no: %d error msg %s\n", errno, strerror(errno)); exit(1);}
@@ -39,22 +43,28 @@ private:
 
     int32_t epollfd;
     int32_t listenfd;
+    ::std::unordered_map<uint64_t, int32_t> peersfd;
+    ::std::set<int32_t> unknownfd;
     int32_t rbind;
     ::std::mutex buf_mutex;
 
     void setNonBlock(int32_t fd);
     void updateEvents(int32_t efd, int32_t fd, int32_t events, bool modify);
     void delete_event(int32_t efd, int32_t fd, int32_t events);
+    void connecttopeer(::std::string&& ip, uint32_t port, uint64_t id);
     void handleAccept(int32_t efd, int32_t fd);
     void handleRead(int32_t efd, int32_t fd);
     void handleWrite(int32_t efd, int32_t fd);
+    void handleConnect(int32_t efd, int32_t fd);
     void kqueue_loop_once(int32_t efd, int32_t lfd, int32_t waitms);
 public:
-    Kqueue(::std::string addr, uint32_t port, NetType type, uint32_t bufsize, uint32_t fdsize, uint32_t listenq);
-    virtual ~Kqueue();
+    Kqueue(::std::string ip, uint32_t port, NetType type, uint32_t bufsize, uint32_t fdsize, uint32_t listenq);
+    virtual ~Kqueue() override;
 
-    virtual void send() override;
-    virtual void recv() override;
+    virtual void send(uint64_t id) override;
+    virtual void recv(uint64_t id) override;
+    virtual void conn(::std::string&& ip, uint32_t port, uint64_t id) override;
+    virtual void listenp(uint32_t listenq = 20) override;
     virtual void loop_once(uint32_t waitms) override;
 };
 } // namespace common

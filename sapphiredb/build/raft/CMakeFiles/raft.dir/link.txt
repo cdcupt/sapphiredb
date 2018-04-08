@@ -1,0 +1,2 @@
+/Library/Developer/CommandLineTools/usr/bin/ar qc libraft.a  CMakeFiles/raft.dir/__/main.cc.o CMakeFiles/raft.dir/node.cc.o CMakeFiles/raft.dir/progress.cc.o CMakeFiles/raft.dir/raft.cc.o
+/Library/Developer/CommandLineTools/usr/bin/ranlib libraft.a

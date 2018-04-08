@@ -5,10 +5,16 @@ add_definitions(-std=c++11)
 
 aux_source_directory(${PROJECT_SOURCE_DIR} DIR_SRCS)
 
-add_subdirectory(raft)
+include_directories(${PROJECT_SOURCE_DIR}/..)
+
+#add_subdirectory(raft)
+add_subdirectory(common)
+#add_subdirectory(test)
 
 add_executable(sapphiredb main.cc)
 
-target_link_libraries(sapphiredb raft)
-target_link_libraries(raftpb -pthread)
-target_link_libraries(raftpb -std=c++11)
+#target_link_libraries(sapphiredb raft)
+target_link_libraries(sapphiredb common)
+#target_link_libraries(sapphiredb test)
+target_link_libraries(sapphiredb -pthread)
+target_link_libraries(sapphiredb -std=c++11)
