@@ -1,2 +1,0 @@
-/Library/Developer/CommandLineTools/usr/bin/ar qc libraftpb.a  CMakeFiles/raftpb.dir/__/__/main.cc.o CMakeFiles/raftpb.dir/__/node.cc.o CMakeFiles/raftpb.dir/__/progress.cc.o CMakeFiles/raftpb.dir/__/raft.cc.o CMakeFiles/raftpb.dir/raftpb.pb.cc.o
-/Library/Developer/CommandLineTools/usr/bin/ranlib libraftpb.a
