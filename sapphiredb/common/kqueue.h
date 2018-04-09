@@ -16,6 +16,13 @@
 #include <stdlib.h>
 #include <vector>
 #include <set>
+#include <queue>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <future>
+#include <functional>
+#include <stdexcept>
 #include <unordered_map>
 #include <utility>
 #include "common/net.h"
@@ -45,8 +52,10 @@ private:
     int32_t listenfd;
     ::std::unordered_map<uint64_t, int32_t> peersfd;
     ::std::set<int32_t> unknownfd;
+    ::std::queue<int32_t> readfd;
     int32_t rbind;
     ::std::mutex buf_mutex;
+    ::std::mutex queue_mutex;
 
     void setNonBlock(int32_t fd);
     void updateEvents(int32_t efd, int32_t fd, int32_t events, bool modify);
@@ -66,6 +75,7 @@ public:
     virtual void conn(::std::string&& ip, uint32_t port, uint64_t id) override;
     virtual void listenp(uint32_t listenq = 20) override;
     virtual void loop_once(uint32_t waitms) override;
+    void doSomething(std::function<void(int32_t fd)> task);
 };
 } // namespace common
 } // namespace sapphiredb

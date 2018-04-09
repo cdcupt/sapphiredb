@@ -63,7 +63,7 @@ void sapphiredb::common::Kqueue::handleAccept(int32_t efd, int32_t fd) {
     socklen_t alen = sizeof(peer);
     int32_t r = getpeername(cfd, reinterpret_cast<struct sockaddr *>(&peer), &alen);
     exit_if(r<0, "getpeername failed");
-    printf("accept a connection from %s\n", inet_ntoa(raddr.sin_addr));
+    //printf("accept a connection from %s\n", inet_ntoa(raddr.sin_addr));
     unknownfd.insert(cfd);
     setNonBlock(cfd);
     updateEvents(efd, cfd, KQUEUE_READ_EVENT|KQUEUE_WRITE_EVENT, false);
@@ -77,7 +77,7 @@ void sapphiredb::common::Kqueue::handleRead(int32_t efd, int32_t fd) {
         while ((n=::read(fd, buf, sizeof(buf))) > 0) {
             if(n+this->recvbuf->len > this->recvbuf->size){
                 //TODO error log
-                //::std::cerr << "buf is really fill!" << ::std::endl;
+                ::std::cerr << "buf is really fill!" << ::std::endl;
                 //::std::cerr << "size: " << this->recvbuf->size << "len: " << this->recvbuf->len << ::std::endl;
                 return;
             }
@@ -90,14 +90,19 @@ void sapphiredb::common::Kqueue::handleRead(int32_t efd, int32_t fd) {
                 this->recvbuf->len += n;
             }
         }
+        
         if(n == 0){
             //TODO error log
             delete_event(efd, fd, KQUEUE_READ_EVENT);
-            ::std::cerr << "socket closed!" << ::std::endl;
+            //::std::cerr << "socket closed!" << ::std::endl;
             return;
         }
-        if(n<0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+        
+        if(n<0 && (errno == EAGAIN || errno == EWOULDBLOCK)){
+            std::unique_lock<std::mutex> lock(this->queue_mutex);
+            this->readfd.emplace(fd);
             return;
+        }
         if(n<0 && (errno == EINTR)){
             continue;
         }
@@ -119,7 +124,7 @@ void sapphiredb::common::Kqueue::handleWrite(int32_t efd, int32_t fd) {
         else if(r == 0){
             //TODO error log
             delete_event(efd, fd, KQUEUE_WRITE_EVENT);
-            ::std::cerr << "socket closed!" << ::std::endl;
+            //::std::cerr << "socket closed!" << ::std::endl;
             return;
         }
         else if(r < 0){
@@ -139,6 +144,19 @@ void sapphiredb::common::Kqueue::handleConnect(int32_t efd, int32_t fd) {
     //::std::cout << "****handleConnect****" << ::std::endl;
     setNonBlock(fd);
     updateEvents(efd, fd, KQUEUE_READ_EVENT, false);
+}
+
+void sapphiredb::common::Kqueue::doSomething(std::function<void(int32_t fd)> task){
+    if(!this->readfd.empty()){
+        std::unique_lock<std::mutex> lock(this->queue_mutex);
+        if(!this->readfd.empty()){
+            int32_t fd = std::move(this->readfd.front());
+            this->readfd.pop();
+            task(fd);
+            close(fd);
+            clearRecvbuf();
+        }
+    }
 }
 
 void sapphiredb::common::Kqueue::kqueue_loop_once(int32_t efd, int32_t lfd, int32_t waitms) {
@@ -231,5 +249,13 @@ sapphiredb::common::Kqueue::~Kqueue(){
     }
     for(auto ufd : this->unknownfd){
         close(ufd);
+    }
+    while(!this->readfd.empty()){
+        std::unique_lock<std::mutex> lock(this->queue_mutex);
+        while(!this->readfd.empty()){
+            int32_t fd = std::move(this->readfd.front());
+            this->readfd.pop();
+            close(fd);
+        }
     }
 }

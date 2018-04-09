@@ -1,2 +1,0 @@
-/Library/Developer/CommandLineTools/usr/bin/ar qc libcommon.a  CMakeFiles/common.dir/__/main.cc.o CMakeFiles/common.dir/kqueue.cc.o CMakeFiles/common.dir/net.cc.o CMakeFiles/common.dir/timer.cc.o CMakeFiles/common.dir/uniqueid.cc.o
-/Library/Developer/CommandLineTools/usr/bin/ranlib libcommon.a
