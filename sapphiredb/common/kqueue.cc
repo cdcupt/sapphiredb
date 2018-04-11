@@ -20,7 +20,7 @@ void sapphiredb::common::Kqueue::updateEvents(int32_t efd, int32_t fd, int32_t e
     } else if (modify){
         EV_SET(&ev[n++], fd, EVFILT_WRITE, EV_DELETE, 0, 0, (void*)(intptr_t)fd);
     }
-    //TODO log
+    logger->info("update fd[{:d}] into kqueue", fd);
     int32_t r = kevent(efd, ev, n, NULL, 0, NULL);
     exit_if(r, "kevent failed ");
 }
@@ -34,7 +34,7 @@ void sapphiredb::common::Kqueue::delete_event(int32_t efd, int32_t fd, int32_t e
     if (events & KQUEUE_WRITE_EVENT) {
         EV_SET(&ev[n++], fd, EVFILT_WRITE, EV_DELETE, 0, 0, (void*)(intptr_t)fd);
     }
-    //TODO log
+    logger->info("delete fd[{:d}] into kqueue", fd);
     int32_t r = kevent(efd, ev, n, NULL, 0, NULL);
     exit_if(r, "kevent failed ");
 }
@@ -63,7 +63,7 @@ void sapphiredb::common::Kqueue::handleAccept(int32_t efd, int32_t fd) {
     socklen_t alen = sizeof(peer);
     int32_t r = getpeername(cfd, reinterpret_cast<struct sockaddr *>(&peer), &alen);
     exit_if(r<0, "getpeername failed");
-    //printf("accept a connection from %s\n", inet_ntoa(raddr.sin_addr));
+    logger->info("accept a connection from {:s}", inet_ntoa(raddr.sin_addr));
     unknownfd.insert(cfd);
     setNonBlock(cfd);
     updateEvents(efd, cfd, KQUEUE_READ_EVENT|KQUEUE_WRITE_EVENT, false);
@@ -76,9 +76,7 @@ void sapphiredb::common::Kqueue::handleRead(int32_t efd, int32_t fd) {
     for(;;){
         while ((n=::read(fd, buf, sizeof(buf))) > 0) {
             if(n+this->recvbuf->len > this->recvbuf->size){
-                //TODO error log
-                ::std::cerr << "buf is really fill!" << ::std::endl;
-                //::std::cerr << "size: " << this->recvbuf->size << "len: " << this->recvbuf->len << ::std::endl;
+                logger->warn("buf is really fill when read fd[{:d}]", fd);
                 return;
             }
             else{
@@ -92,13 +90,13 @@ void sapphiredb::common::Kqueue::handleRead(int32_t efd, int32_t fd) {
         }
         
         if(n == 0){
-            //TODO error log
             delete_event(efd, fd, KQUEUE_READ_EVENT);
-            //::std::cerr << "socket closed!" << ::std::endl;
+            logger->warn("fd[{:d}] socket closed!", fd);
             return;
         }
         
         if(n<0 && (errno == EAGAIN || errno == EWOULDBLOCK)){
+            logger->warn("Read fd[{:d}] EAGAIN", fd);
             std::unique_lock<std::mutex> lock(this->queue_mutex);
             this->readfd.emplace(fd);
             return;
@@ -118,18 +116,17 @@ void sapphiredb::common::Kqueue::handleWrite(int32_t efd, int32_t fd) {
         
         int32_t r = ::write(fd, buf.c_str(), this->sendbuf->len); //写出读取的数据
         if(r<0 && (errno == EAGAIN || errno == EINTR)){
-            ::std::cout << "EAGAIN OR EINTR?" << ::std::endl;
+            logger->warn("Write fd[{:d}] EAGAIN OR EINTR?", fd);
             continue;
         }
         else if(r == 0){
-            //TODO error log
             delete_event(efd, fd, KQUEUE_WRITE_EVENT);
-            //::std::cerr << "socket closed!" << ::std::endl;
+            logger->warn("fd[{:d}] socket closed!", fd);
             return;
         }
         else if(r < 0){
             delete_event(efd, fd, KQUEUE_WRITE_EVENT);
-            ::std::cerr << "write error" << ::std::endl;
+            logger->error("Write fd[{:d}] write error", fd);
             return;
         }
         else{
@@ -234,7 +231,12 @@ sapphiredb::common::Kqueue::Kqueue(::std::string ip, uint32_t port, NetType type
         addr.sin_port = htons(port);
         inet_pton(AF_INET, ip.c_str(), &addr.sin_addr);
 
-        this->rbind = bind(listenfd,(struct sockaddr *)&addr, sizeof(struct sockaddr));
+        int32_t rbind = bind(listenfd,(struct sockaddr *)&addr, sizeof(struct sockaddr));
+        if(rbind) throw "bind error";
+
+        //this->logger = spdlog::basic_logger_mt("logger", "kqueue_log.txt"); 
+        this->logger = spdlog::stdout_color_mt("console");
+        //this->logger = spdlog::rotating_logger_mt("logger", "kqueue_log.txt", 1048576 * 5, 3);
     }
     catch(...){
         ::std::cerr << "epoll alloc fd error" << ::std::endl;
@@ -257,5 +259,11 @@ sapphiredb::common::Kqueue::~Kqueue(){
             this->readfd.pop();
             close(fd);
         }
+    }
+    try{
+        spdlog::drop_all();
+    }
+    catch(...){
+        ::std::abort();
     }
 }

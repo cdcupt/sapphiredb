@@ -25,9 +25,9 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
-#include "common/net.h"
 
-#define exit_if(r, ...) if(r) {printf(__VA_ARGS__); printf("error no: %d error msg %s\n", errno, strerror(errno)); exit(1);}
+#include "common/net.h"
+#include "common/spdlog/include/spdlog/spdlog.h"
 
 namespace sapphiredb
 {
@@ -35,6 +35,7 @@ namespace common
 {
 class Kqueue : public Netcon{
 private:
+    #define exit_if(r, ...) if(r) {logger->error(__VA_ARGS__); logger->error("error no: {:d} error msg {:s}", errno, strerror(errno)); exit(1);}
     enum Event{
         KQUEUE_READ_EVENT = 1,
         KQUEUE_WRITE_EVENT = 2
@@ -56,6 +57,7 @@ private:
     int32_t rbind;
     ::std::mutex buf_mutex;
     ::std::mutex queue_mutex;
+    std::shared_ptr<spdlog::logger> logger;
 
     void setNonBlock(int32_t fd);
     void updateEvents(int32_t efd, int32_t fd, int32_t events, bool modify);
@@ -70,12 +72,13 @@ public:
     Kqueue(::std::string ip, uint32_t port, NetType type, uint32_t bufsize, uint32_t fdsize, uint32_t listenq);
     virtual ~Kqueue() override;
 
-    virtual void send(uint64_t id) override;
-    virtual void recv(uint64_t id) override;
-    virtual void conn(::std::string&& ip, uint32_t port, uint64_t id) override;
+    //interface
+    virtual void send(uint64_t id) override; //p2p send
+    virtual void recv(uint64_t id) override; //p2p recieve
+    virtual void conn(::std::string&& ip, uint32_t port, uint64_t id) override; //p2p connect
     virtual void listenp(uint32_t listenq = 20) override;
-    virtual void loop_once(uint32_t waitms) override;
-    void doSomething(std::function<void(int32_t fd)> task);
+    virtual void loop_once(uint32_t waitms) override; //kqueue loop
+    void doSomething(std::function<void(int32_t fd)> task); //after read callback
 };
 } // namespace common
 } // namespace sapphiredb

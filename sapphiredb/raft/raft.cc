@@ -15,8 +15,8 @@ void sapphiredb::raft::Raft::stepDown(uint64_t term, uint64_t leader){
     this->_state = STATE_FOLLOWER;
 
     switch(this->_state){
-        case STATE_LEADER : logger->warn("id: %d step dowm from leader to follower in term %d", this->_id, this->_currentTerm); break;
-        case STATE_CANDIDATE : logger->warn("id: %d step dowm from candidate to follower in term %d", this->_id, this->_currentTerm); break;
+        case STATE_LEADER : logger->warn("id: {:d} step dowm from leader to follower in term {:d}", this->_id, this->_currentTerm); break;
+        case STATE_CANDIDATE : logger->warn("id: {:d} step dowm from candidate to follower in term {:d}", this->_id, this->_currentTerm); break;
         default: ;
     }
 }
@@ -52,7 +52,7 @@ void sapphiredb::raft::tickElection(sapphiredb::raft::Raft* r){
             r->generalStep(msg);
         }
         catch(...){
-            r->logger->error("generalStep filed in term %d", r->_currentTerm);
+            r->logger->error("generalStep filed in term {:d}", r->_currentTerm);
         }
     }
 }
@@ -72,14 +72,14 @@ void sapphiredb::raft::tickHeartbeat(sapphiredb::raft::Raft* r){
                 r->generalStep(msg);
             }
             catch(...){
-                r->logger->error("generalStep filed in term %d", r->_currentTerm);
+                r->logger->error("generalStep filed in term {:d}", r->_currentTerm);
             }
         }
 
         //TODO leader transfer
     }
     if(r->_state != STATE_LEADER){
-        r->logger->error("id: %d produce invaild heartbeat in term %d.", r->_id, r->_currentTerm);
+        r->logger->error("id: {:d} produce invaild heartbeat in term {:d}.", r->_id, r->_currentTerm);
         return;
     }
     if(r->_heartbeatElapsed >= r->_heartbeatTimeout){
@@ -92,7 +92,7 @@ void sapphiredb::raft::tickHeartbeat(sapphiredb::raft::Raft* r){
             r->generalStep(msg);
         }
         catch(...){
-            r->logger->error("generalStep filed in term %d", r->_currentTerm);
+            r->logger->error("generalStep filed in term {:d}", r->_currentTerm);
         }
     }
     if(r->_lockingElapsed >= r->_lockingTimeout){
@@ -104,7 +104,7 @@ void sapphiredb::raft::tickHeartbeat(sapphiredb::raft::Raft* r){
 
 void sapphiredb::raft::Raft::becomeCandidate(){
     if(this->_state == STATE_LEADER){
-        logger->error("id: %d try to become candidate in term %d.", this->_id, this->_currentTerm);
+        logger->error("id: {:d} try to become candidate in term {:d}.", this->_id, this->_currentTerm);
         return;
     }
     this->_step = sapphiredb::raft::stepCandidate;
@@ -112,12 +112,12 @@ void sapphiredb::raft::Raft::becomeCandidate(){
     this->_tick = sapphiredb::raft::tickElection;
     this->_vote = this->_id;
     this->_state = STATE_CANDIDATE;
-    logger->warn("id: %d from follower change to candidate in term %d.", this->_id, this->_currentTerm);
+    logger->warn("id: {:d} from follower change to candidate in term {:d}.", this->_id, this->_currentTerm);
 }
 
 void sapphiredb::raft::Raft::becomeLeader(){
     if(this->_state == STATE_FOLLOWER){
-        logger->error("id: %d try to change to candidate from leader in term %d.", this->_id, this->_currentTerm);
+        logger->error("id: {:d} try to change to candidate from leader in term {:d}.", this->_id, this->_currentTerm);
         return;
     }
     this->_step = sapphiredb::raft::stepLeader;
@@ -126,7 +126,7 @@ void sapphiredb::raft::Raft::becomeLeader(){
     this->_leader = this->_id;
     this->_state = STATE_LEADER;
     //TODO(Additional log)
-    logger->warn("id : %d from candidate change to leader in term %d.", this->_id, this->_currentTerm);
+    logger->warn("id : {:d} from candidate change to leader in term {:d}.", this->_id, this->_currentTerm);
 }
 
 void sapphiredb::raft::Raft::becomeLocking(){
@@ -134,7 +134,7 @@ void sapphiredb::raft::Raft::becomeLocking(){
     this->_tick = sapphiredb::raft::tickHeartbeat;
     this->_state = STATE_LOCKING;
 
-    logger->warn("id : %d in locking.", this->_id);
+    logger->warn("id : {:d} in locking.", this->_id);
 }
 
 uint32_t sapphiredb::raft::Raft::quorum(){
@@ -173,7 +173,7 @@ void sapphiredb::raft::stepLeader(sapphiredb::raft::Raft* r, raftpb::Message msg
                 pr.setRecentActive();
 
                 if(msg.reject()){
-                    r->logger->warn("%d received msgApp rejection(lastindex: %d) from %d for index %d",
+                    r->logger->warn("{:d} received msgApp rejection(lastindex: {:d}) from {:d} for index {:d}",
                             r->_id, msg.rejecthint(), msg.from(), msg.index());
                 }
             }
@@ -197,7 +197,7 @@ void sapphiredb::raft::stepLeader(sapphiredb::raft::Raft* r, raftpb::Message msg
 void sapphiredb::raft::Raft::commitTo(uint64_t commit){
     if(this->_commitIndex < commit){
         if(this->_lastApplied < commit){
-            logger->error("commit(%d) is out of range [lastIndex(%d)]. Was the raft log corrupted, truncated, or lost?",
+            logger->error("commit({:d}) is out of range [lastIndex({:d})]. Was the raft log corrupted, truncated, or lost?",
              commit, this->_lastApplied);
         }
         this->_commitIndex = commit;
@@ -206,10 +206,10 @@ void sapphiredb::raft::Raft::commitTo(uint64_t commit){
 
 int32_t sapphiredb::raft::Raft::grantMe(uint64_t id, raftpb::MessageType t, bool v){
     if(v){
-        logger->info("%d received %s from %d at term %d", this->_id, t, id, this->_currentTerm);
+        logger->info("{:d} received {:s} from {:d} at term {:d}", this->_id, t, id, this->_currentTerm);
     }
     else{
-        logger->info("%d received %s rejection from %d at term %d", this->_id, t, id, this->_currentTerm);
+        logger->info("{:d} received {:s} rejection from {:d} at term {:d}", this->_id, t, id, this->_currentTerm);
     }
 
     if(this->_votes.find(id) == this->_votes.end()){
@@ -277,7 +277,7 @@ void sapphiredb::raft::stepCandidate(sapphiredb::raft::Raft* r, raftpb::Message 
                     r->send(tmsg);
                 }
                 else{
-                    r->logger->info("%d rejected msgApp [logterm: %d, index: %d] from %d",
+                    r->logger->info("{:d} rejected msgApp [logterm: {:d}, index: {:d}] from {:d}",
                             r->_id, msg.logterm(), msg.index(), msg.from());
 
                     raftpb::Message tmsg;
@@ -292,7 +292,7 @@ void sapphiredb::raft::stepCandidate(sapphiredb::raft::Raft* r, raftpb::Message 
         case raftpb::MsgVoteResp:
             {
                 int32_t grant = r->grantMe(msg.from(), msg.type(), !msg.reject());
-                r->logger->info("%d [quorum: %d] has received %d %s votes and %d vote rejections",
+                r->logger->info("{:d} [quorum: {:d}] has received {:d} {:s} votes and {:d} vote rejections",
                         r->_id, r->quorum(), grant, msg.type(), r->_votes.size()-grant);
                 if(r->quorum() == grant){
                     r->becomeLeader();
@@ -357,7 +357,7 @@ void sapphiredb::raft::stepFollower(sapphiredb::raft::Raft* r, raftpb::Message m
                     r->send(tmsg);
                 }
                 else{
-                    r->logger->info("%d rejected msgApp [logterm: %d, index: %d] from %d",
+                    r->logger->info("{:d} rejected msgApp [logterm: {:d}, index: {:d}] from {:d}",
                             r->_id, msg.logterm(), msg.index(), msg.from());
 
                     raftpb::Message tmsg;
@@ -378,7 +378,7 @@ void sapphiredb::raft::stepFollower(sapphiredb::raft::Raft* r, raftpb::Message m
         case raftpb::MsgTransferLeader:
             {
                 if(r->_leader == 0){
-                    r->logger->error("id: %d can't transferleader because leader is 0 in term %d", r->_id, r->_currentTerm);
+                    r->logger->error("id: {:d} can't transferleader because leader is 0 in term {:d}", r->_id, r->_currentTerm);
                     return;
                 }
                 msg.set_to(r->_leader);
@@ -450,12 +450,12 @@ void sapphiredb::raft::stepFollower(sapphiredb::raft::Raft* r, raftpb::Message m
 void sapphiredb::raft::Raft::send(raftpb::Message msg){
     if(msg.type() == raftpb::MsgVote || msg.type() == raftpb::MsgVoteResp){
         if(msg.term() == 0){
-            logger->error("term should be set when sending %s", msg.type());
+            logger->error("term should be set when sending {:s}", msg.type());
         }
     }
     else{
         if(msg.term() != 0){
-            logger->error("term should not be set when sending %s with msg term %d", msg.type(), msg.term());
+            logger->error("term should not be set when sending {:s} with msg term {:d}", msg.type(), msg.term());
         }
 
         //TODO MsgProp MsgReadIndex
@@ -535,7 +535,7 @@ void sapphiredb::raft::Raft::sendAppend(uint64_t to){
                 }
             default:
                 {
-                    logger->error("%d is sending append in unhandled state %s",
+                    logger->error("{:d} is sending append in unhandled state {:s}",
                             this->_id, this->_prs[to].getState());
                 }
         }
@@ -575,12 +575,12 @@ void sapphiredb::raft::Raft::generalStep(raftpb::Message msg){
     else if(msg.term() > this->_currentTerm){
         if(msg.type() == raftpb::MsgVote && this->_checkQuorum && this->_leader != 0 &&
                 this->_electionElapsed < this->_electionTimeout){
-             logger->error("id: %d ignore vote request from %d [logterm: %d, index: %d]",
+             logger->error("id: {:d} ignore vote request from {:d} [logterm: {:d}, index: {:d}]",
                      this->_id, msg.from(), msg.logterm(), msg.index());
             return;
         }
 
-        logger->error("%d in term: %d receive a %s message from %d at term: %d",
+        logger->error("{:d} in term: {:d} receive a {:s} message from {:d} at term: {:d}",
             this->_id, this->_currentTerm, msg.type(), msg.from(), msg.term());
         this->stepDown(msg.term(), msg.from());
     }
@@ -592,7 +592,7 @@ void sapphiredb::raft::Raft::generalStep(raftpb::Message msg){
             this->send(tmsg);
         }
         else{
-            logger->error("%d in term: %d receive a %s message from %d at term: %d",
+            logger->error("{:d} in term: {:d} receive a {:s} message from {:d} at term: {:d}",
                 this->_id, this->_currentTerm, msg.type(), msg.from(), msg.term());
         }
         return;
@@ -605,7 +605,7 @@ void sapphiredb::raft::Raft::generalStep(raftpb::Message msg){
                         (msg.logterm() > this->_commitIndex ||
                          (msg.logterm() == this->_commitIndex &&
                           msg.index() >= this->_lastApplied))){
-                    logger->info("%d rejected msgApp [logterm: %d, index: %d] from %d",
+                    logger->info("{:d} rejected msgApp [logterm: {:d}, index: {:d}] from {:d}",
                             this->_id, msg.logterm(), msg.index(), msg.from());
                     raftpb::Message tmsg;
                     tmsg.set_to(msg.from());
@@ -616,7 +616,7 @@ void sapphiredb::raft::Raft::generalStep(raftpb::Message msg){
                     this->_vote = msg.from();
                 }
                 else{
-                    logger->info("%d rejected msgApp [logterm: %d, index: %d] from %d",
+                    logger->info("{:d} rejected msgApp [logterm: {:d}, index: {:d}] from {:d}",
                             this->_id, msg.logterm(), msg.index(), msg.from());
                     raftpb::Message tmsg;
                     tmsg.set_to(msg.from());
@@ -634,7 +634,7 @@ void sapphiredb::raft::Raft::generalStep(raftpb::Message msg){
                 this->_step(this, msg);
             }
             catch(...){
-                logger->error("step filed in term %d", this->_currentTerm);
+                logger->error("step filed in term {:d}", this->_currentTerm);
                 return;
             }
     }
@@ -668,8 +668,9 @@ sapphiredb::raft::Raft::Raft(uint64_t id, ::std::string path, uint32_t heartbeat
     _step(sapphiredb::raft::stepFollower), _tick(sapphiredb::raft::tickElection), _checkQuorum(false){
 
     try{
-        FILE* log = fopen(path.c_str(), "w");
-        this->logger = spdlog::basic_logger_mt("logger", "raft_log");
+        //FILE* log = fopen(path.c_str(), "w");
+        //this->logger = spdlog::basic_logger_mt("logger", path);
+        this->logger = spdlog::stdout_color_mt("console");
 
         this->resetRandomizedElectionTimeout();
     }
