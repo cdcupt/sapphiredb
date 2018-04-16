@@ -20,7 +20,7 @@ int main(){
             }
         });
     while(1){
-        if(kque->getData()->len == 0) ::std::cout << "Nothing here!" << ::std::endl;
+        if(kque->getData()->len == 0);
         else {
             ::std::cout << *(kque->getData()->buf) << ::std::endl;
             ::std::cout << kque->getData()->len << ::std::endl;

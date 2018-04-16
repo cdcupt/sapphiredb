@@ -54,7 +54,9 @@ public:
     virtual void loop_once(uint32_t waitms) = 0;
 
     Data* getData();
-    bool stackingData(::std::string& data);
+    bool pushData(::std::string& data);
+    bool pushData(::std::string&& data);
+    ::std::string popData();
     void clearSendbuf();
     void clearRecvbuf();
 protected:

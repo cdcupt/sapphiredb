@@ -3,7 +3,7 @@
 sapphiredb::common::Netcon::Data* sapphiredb::common::Netcon::getData(){
     return recvbuf;
 }
-bool sapphiredb::common::Netcon::stackingData(::std::string& data){
+bool sapphiredb::common::Netcon::pushData(::std::string& data){
     if(sendbuf->len+data.size() > sendbuf->size) return false;
     else{
         ::std::lock_guard<::std::mutex> lock(this->buf_mutex);
@@ -14,6 +14,27 @@ bool sapphiredb::common::Netcon::stackingData(::std::string& data){
         sendbuf->len += data.size();
     }
     return true;
+}
+bool sapphiredb::common::Netcon::pushData(::std::string&& data){
+    if(sendbuf->len+data.size() > sendbuf->size) return false;
+    else{
+        ::std::lock_guard<::std::mutex> lock(this->buf_mutex);
+        int j = this->sendbuf->len;
+        for(auto ch : data){
+            (*(this->sendbuf->buf))[j++] = ch;
+        }
+        sendbuf->len += data.size();
+    }
+    return true;
+}
+::std::string sapphiredb::common::Netcon::popData(){
+    if(sendbuf->len <= 0) return "";
+    else{
+        ::std::lock_guard<::std::mutex> lock(this->buf_mutex);
+        uint32_t slen = sendbuf->len;
+        sendbuf->len = 0;
+        return ::std::string(this->sendbuf->buf->begin(), this->sendbuf->buf->begin()+slen);
+    }
 }
 void sapphiredb::common::Netcon::clearSendbuf(){
     ::std::lock_guard<::std::mutex> lock(this->buf_mutex);

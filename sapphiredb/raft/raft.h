@@ -12,6 +12,11 @@
 #include <string>
 #include <cstdio>
 #include <queue>
+#include <mutex>
+#include <condition_variable>
+#include <future>
+#include <functional>
+#include <stdexcept>
 
 #include "raft/progress.h"
 #include "raft/raftpb/raftpb.pb.h"
@@ -119,6 +124,14 @@ private:
     //check quorum
     bool _checkQuorum;
 
+    //message box
+    ::std::queue<raftpb::Message> _sendmsgs;
+    ::std::queue<raftpb::Message> _recvmsgs;
+
+    std::mutex sendbuf_mutex;
+    std::mutex recvbuf_mutex;
+
+    uint32_t rand(uint32_t min, uint32_t max, uint32_t seed = 0);
     void resetRandomizedElectionTimeout();
     void reset(uint64_t term);
     uint32_t quorum();
@@ -135,8 +148,11 @@ private:
     //try to modify constant data
     uint64_t tryAppend(const uint64_t& index, const uint64_t& logTerm, const uint64_t& committed, const ::std::vector<Entrie>& ents);
 
+    ::std::string serializeData(raftpb::Message msg);
+    raftpb::Message deserializeData(::std::string data);
+
 public:
-    Raft(uint64_t id, ::std::string path = "../raft_log", uint32_t heartbeatTimeout = 10, uint32_t electionTimeout = 150);
+    Raft(uint64_t id, ::std::string path = "./raft_log", uint32_t heartbeatTimeout = 10, uint32_t electionTimeout = 150);
     ~Raft();
 
     friend void stepLeader(sapphiredb::raft::Raft* r, raftpb::Message msg);
@@ -166,15 +182,14 @@ public:
 
     //general API
     void tickNode();
-    void stepNode(raftpb::Message& msg);
+    void stepNode();
 
     void addNode(uint64_t to);
 
     void stop();
 
-    //message box
-    ::std::vector<raftpb::Message> _msgs;
-    ::std::queue<raftpb::Message> _recvmsgs;
+    ::std::string tryPopSendbuf();
+    void tryPushRecvbuf(::std::string data);
 };
 } //namespace raft
 } //namespace sapphiredb

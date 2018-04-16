@@ -19,7 +19,7 @@ public:
     }
 
     uint64_t getUniqueid();
-private:
+public:
     Uniqueid();
     Uniqueid(Uniqueid const&);
     Uniqueid& operator=(Uniqueid const&);

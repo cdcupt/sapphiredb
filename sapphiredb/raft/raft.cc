@@ -1,6 +1,6 @@
 #include "raft/raft.h"
 
-uint32_t rand(uint32_t min, uint32_t max, uint32_t seed = 0)
+uint32_t sapphiredb::raft::Raft::rand(uint32_t min, uint32_t max, uint32_t seed)
 {
     static std::default_random_engine e(seed);
     static std::uniform_real_distribution<double> u(min, max);
@@ -22,7 +22,7 @@ void sapphiredb::raft::Raft::stepDown(uint64_t term, uint64_t leader){
 }
 
 void sapphiredb::raft::Raft::resetRandomizedElectionTimeout(){
-    this->_randomizedElectionTimeout = this->_electionTimeout + rand(0, this->_electionTimeout, time(NULL));
+    this->_randomizedElectionTimeout = this->_electionTimeout + this->rand(0, this->_electionTimeout, time(NULL));
 }
 
 void sapphiredb::raft::Raft::reset(uint64_t term){
@@ -142,6 +142,27 @@ uint32_t sapphiredb::raft::Raft::quorum(){
 }
 
 //TODO stepLocking
+void sapphiredb::raft::stepLocking(sapphiredb::raft::Raft* r, raftpb::Message msg){
+    switch(msg.type()){
+        case raftpb::MsgHeartbeat:
+        {
+            r->_electionElapsed = 0;
+            r->_leader = msg.from();
+            r->commitTo(msg.commit());
+
+            raftpb::Message tmsg;
+            tmsg.set_from(r->_id);
+            tmsg.set_to(msg.from());
+            tmsg.set_type(raftpb::MsgHeartbeatResp);
+            tmsg.set_context(msg.context());
+
+            r->send(tmsg);
+            r->stepDown(r->_currentTerm, msg.from());
+            break;
+        }
+        default: ;
+    }
+}
 
 void sapphiredb::raft::stepLeader(sapphiredb::raft::Raft* r, raftpb::Message msg){
     switch(msg.type()){
@@ -233,7 +254,7 @@ void sapphiredb::raft::stepCandidate(sapphiredb::raft::Raft* r, raftpb::Message 
     switch(msg.type()){
         case raftpb::MsgHeartbeat:
             {
-                r->stepDown(msg.term(), msg.from());
+                r->stepDown(r->_currentTerm, msg.from());
                 r->commitTo(msg.commit());
 
                 raftpb::Message tmpMsg;
@@ -462,7 +483,7 @@ void sapphiredb::raft::Raft::send(raftpb::Message msg){
     }
 
     //TODO message queue
-    this->_msgs.push_back(msg);
+    this->_sendmsgs.push(msg);
 }
 
 void sapphiredb::raft::Raft::sendHeartbeat(uint64_t to, std::string ctx){
@@ -599,13 +620,46 @@ void sapphiredb::raft::Raft::generalStep(raftpb::Message msg){
     }
 
     switch(msg.type()){
+        case raftpb::MsgHup:
+            {
+                if(this->_state != sapphiredb::raft::STATE_LEADER){
+                    logger->info("%d is starting a new election at term %d",
+                                this->_id, this->_currentTerm);
+                    
+                    this->becomeCandidate();
+                    if(this->quorum() == this->grantMe(this->_id, raftpb::MsgVoteResp, true)){
+                        this->becomeLeader();
+                        return;
+                    }
+
+                    for(auto pr : this->_prs){
+                        if(pr.first == this->_id) continue;
+                        //TODO log
+                        raftpb::Message tmsg;
+                        tmsg.set_term(this->_currentTerm);
+                        tmsg.set_to(pr.first);
+                        tmsg.set_type(raftpb::MsgVote);
+                        tmsg.set_index(this->_lastApplied);
+                        tmsg.set_logterm(this->_commitIndex);
+                        tmsg.set_context("");
+                        //TODO if need transfer leader set_context is must be set
+                        this->send(tmsg);
+                    }
+                }
+                else{
+                    logger->info("%d ignoring MsgHup because already leader",
+                                this->_id);
+                }
+                break;
+            }
         case raftpb::MsgVote:
             {
                 if(((0 == this->_vote) || (this->_vote = msg.from())) &&
                         (msg.logterm() > this->_commitIndex ||
-                         (msg.logterm() == this->_commitIndex &&
-                          msg.index() >= this->_lastApplied))){
-                    logger->info("{:d} rejected msgApp [logterm: {:d}, index: {:d}] from {:d}",
+                        (msg.logterm() == this->_commitIndex &&
+                        msg.index() >= this->_lastApplied)) &&
+                        this->_state != sapphiredb::raft::STATE_LOCKING){
+                    logger->info("{:d} accept msgApp [logterm: {:d}, index: {:d}] from {:d}",
                             this->_id, msg.logterm(), msg.index(), msg.from());
                     raftpb::Message tmsg;
                     tmsg.set_to(msg.from());
@@ -653,13 +707,46 @@ void sapphiredb::raft::Raft::tickNode(){
     _tick(this);
 }
 
-void sapphiredb::raft::Raft::stepNode(raftpb::Message& msg){
-    _step(this, msg);
+void sapphiredb::raft::Raft::stepNode(){
+    ::std::unique_lock<::std::mutex> lock(this->recvbuf_mutex);
+    if(!this->_recvmsgs.empty()){
+        raftpb::Message msg = std::move(this->_recvmsgs.front());
+        this->_recvmsgs.pop();
+        _step(this, msg);
+    }
 }
 
 void sapphiredb::raft::Raft::stop(){
     this->becomeLocking();
     //TODO unsafety
+}
+
+::std::string sapphiredb::raft::Raft::serializeData(raftpb::Message msg){
+    ::std::string data;
+    msg.SerializeToString(&data);
+    return data;
+}
+
+raftpb::Message sapphiredb::raft::Raft::deserializeData(::std::string data){
+    raftpb::Message msg;
+    msg.ParseFromString(data);
+    return msg;
+}
+
+::std::string sapphiredb::raft::Raft::tryPopSendbuf(){
+    ::std::unique_lock<::std::mutex> lock(this->sendbuf_mutex);
+    if(!this->_sendmsgs.empty()){
+        raftpb::Message msg = std::move(this->_sendmsgs.front());
+        this->_sendmsgs.pop();
+        return serializeData(msg);
+    }
+
+    return "";
+}
+
+void sapphiredb::raft::Raft::tryPushRecvbuf(::std::string data){
+    ::std::unique_lock<::std::mutex> lock(this->recvbuf_mutex);
+    this->_recvmsgs.push(deserializeData(data));
 }
 
 sapphiredb::raft::Raft::Raft(uint64_t id, ::std::string path, uint32_t heartbeatTimeout, uint32_t electionTimeout) :
@@ -670,7 +757,7 @@ sapphiredb::raft::Raft::Raft(uint64_t id, ::std::string path, uint32_t heartbeat
     try{
         //FILE* log = fopen(path.c_str(), "w");
         //this->logger = spdlog::basic_logger_mt("logger", path);
-        this->logger = spdlog::stdout_color_mt("console");
+        this->logger = spdlog::stdout_color_mt("raft_console");
 
         this->resetRandomizedElectionTimeout();
     }
