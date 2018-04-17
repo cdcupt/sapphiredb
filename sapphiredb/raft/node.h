@@ -21,9 +21,9 @@ namespace raft
 class Timeout{
 public:
     uint64_t heartbeatTimeout;
-    uint64_t elecctionTimeout;
+    uint64_t electionTimeout;
 public:
-    Timeout(uint64_t heartbeatTimeout, uint64_t elecctionTimeout);
+    Timeout(uint64_t heartbeatTimeout, uint64_t electionTimeout);
 };
 
 class Config{

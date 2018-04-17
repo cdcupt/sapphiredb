@@ -235,7 +235,7 @@ sapphiredb::common::Kqueue::Kqueue(::std::string ip, uint32_t port, NetType type
         if(rbind) throw "bind error";
 
         //this->logger = spdlog::basic_logger_mt("logger", "kqueue_log.txt"); 
-        this->logger = spdlog::stdout_color_mt("console");
+        this->logger = spdlog::stdout_color_mt("kqueue_console");
         //this->logger = spdlog::rotating_logger_mt("logger", "kqueue_log.txt", 1048576 * 5, 3);
     }
     catch(...){

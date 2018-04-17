@@ -111,8 +111,8 @@ private:
     uint32_t _electionTimeout;
 
     //locking timer
-    uint32_t _lockingElapsed;
-    uint32_t _lockingTimeout;
+    //uint32_t _lockingElapsed;
+    //uint32_t _lockingTimeout;
 
     //func interface
     ::std::function<void(sapphiredb::raft::Raft* r, raftpb::Message msg)> _step;
@@ -181,7 +181,7 @@ public:
     void bcastAppend();
 
     //general API
-    void tickNode();
+    void tickNode(sapphiredb::raft::Raft* r);
     void stepNode();
 
     void addNode(uint64_t to);
@@ -190,6 +190,23 @@ public:
 
     ::std::string tryPopSendbuf();
     void tryPushRecvbuf(::std::string data);
+
+    inline ::std::string name(raftpb::MessageType e){
+        switch(e){
+            case raftpb::MsgTrival: return "MsgTrival";
+            case raftpb::MsgHeartbeat: return "MsgHeartbeat";
+            case raftpb::MsgHeartbeatResp: return "MsgHeartbeatResp";
+            case raftpb::MsgVote: return "MsgVote";
+            case raftpb::MsgVoteResp: return "MsgVoteResp";
+            case raftpb::MsgApp: return "MsgApp";
+            case raftpb::MsgAppResp: return "MsgAppResp";
+            case raftpb::MsgHup: return "MsgHup";
+            case raftpb::MsgCheckQuorum: return "MsgCheckQuorum";
+            case raftpb::MsgTransferLeader: return "MsgTransferLeader";
+            case raftpb::MsgSnap: return "MsgSnap";
+            case raftpb::MsgNode: return "MsgNode";
+        }
+    }
 };
 } //namespace raft
 } //namespace sapphiredb

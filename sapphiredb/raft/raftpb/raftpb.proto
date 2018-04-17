@@ -7,8 +7,9 @@ message ConfState {
 }
 
 enum EntryType {
-    EntryNormal = 0;
-    EntryConfChange = 1;
+    EntryTrival = 0;
+    EntryNormal = 1;
+    EntryConfChange = 2;
 }
 
 message Entry {
@@ -30,17 +31,18 @@ message Snapshot {
 }
 
 enum MessageType {
-    MsgHeartbeat = 0;
-    MsgHeartbeatResp = 1;
-    MsgVote = 2;
-    MsgVoteResp = 3;
-    MsgApp = 4;
-    MsgAppResp = 5;
-    MsgHup = 6;
-    MsgCheckQuorum = 7;
-    MsgTransferLeader = 8;
-    MsgSnap = 9;
-    MsgNode = 10;
+    MsgTrival = 0;
+    MsgHeartbeat = 1;
+    MsgHeartbeatResp = 2;
+    MsgVote = 3;
+    MsgVoteResp = 4;
+    MsgApp = 5;
+    MsgAppResp = 6;
+    MsgHup = 7;
+    MsgCheckQuorum = 8;
+    MsgTransferLeader = 9;
+    MsgSnap = 10;
+    MsgNode = 11;
 }
 
 message Message {

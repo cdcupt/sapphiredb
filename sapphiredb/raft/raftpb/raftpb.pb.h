@@ -81,13 +81,14 @@ extern SnapshotMetadataDefaultTypeInternal _SnapshotMetadata_default_instance_;
 namespace raftpb {
 
 enum EntryType {
-  EntryNormal = 0,
-  EntryConfChange = 1,
+  EntryTrival = 0,
+  EntryNormal = 1,
+  EntryConfChange = 2,
   EntryType_INT_MIN_SENTINEL_DO_NOT_USE_ = ::google::protobuf::kint32min,
   EntryType_INT_MAX_SENTINEL_DO_NOT_USE_ = ::google::protobuf::kint32max
 };
 bool EntryType_IsValid(int value);
-const EntryType EntryType_MIN = EntryNormal;
+const EntryType EntryType_MIN = EntryTrival;
 const EntryType EntryType_MAX = EntryConfChange;
 const int EntryType_ARRAYSIZE = EntryType_MAX + 1;
 
@@ -102,22 +103,23 @@ inline bool EntryType_Parse(
     EntryType_descriptor(), name, value);
 }
 enum MessageType {
-  MsgHeartbeat = 0,
-  MsgHeartbeatResp = 1,
-  MsgVote = 2,
-  MsgVoteResp = 3,
-  MsgApp = 4,
-  MsgAppResp = 5,
-  MsgHup = 6,
-  MsgCheckQuorum = 7,
-  MsgTransferLeader = 8,
-  MsgSnap = 9,
-  MsgNode = 10,
+  MsgTrival = 0,
+  MsgHeartbeat = 1,
+  MsgHeartbeatResp = 2,
+  MsgVote = 3,
+  MsgVoteResp = 4,
+  MsgApp = 5,
+  MsgAppResp = 6,
+  MsgHup = 7,
+  MsgCheckQuorum = 8,
+  MsgTransferLeader = 9,
+  MsgSnap = 10,
+  MsgNode = 11,
   MessageType_INT_MIN_SENTINEL_DO_NOT_USE_ = ::google::protobuf::kint32min,
   MessageType_INT_MAX_SENTINEL_DO_NOT_USE_ = ::google::protobuf::kint32max
 };
 bool MessageType_IsValid(int value);
-const MessageType MessageType_MIN = MsgHeartbeat;
+const MessageType MessageType_MIN = MsgTrival;
 const MessageType MessageType_MAX = MsgNode;
 const int MessageType_ARRAYSIZE = MessageType_MAX + 1;
 

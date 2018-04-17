@@ -1,8 +1,8 @@
 #include "raft/node.h"
 
-sapphiredb::raft::Timeout::Timeout(uint64_t heartbeatTimeout, uint64_t elecctionTimeout){
+sapphiredb::raft::Timeout::Timeout(uint64_t heartbeatTimeout, uint64_t electionTimeout){
     this->heartbeatTimeout = heartbeatTimeout;
-    this->elecctionTimeout = elecctionTimeout;
+    this->electionTimeout = electionTimeout;
 }
 
 sapphiredb::raft::Config::Config(uint64_t id, ::std::string raftlog, Timeout* timeout, ::std::pair<::std::string, uint32_t> socket, ::std::vector<::std::pair<uint64_t, ::std::pair<::std::string, uint32_t>>> peers){
@@ -29,7 +29,7 @@ sapphiredb::raft::Node::Node(Config& conf, ::std::string log){
             this->init(conf);
         }
         else{
-            if(conf.id != 0) this->raft = new Raft(conf.id, conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->heartbeatTimeout);
+            if(conf.id != 0) this->raft = new Raft(conf.id, conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->electionTimeout);
             //else this->raft = new Raft(common::Uniqueid::Instance().getUniqueid(), conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->heartbeatTimeout);
             this->init(conf);
         }
@@ -51,7 +51,7 @@ sapphiredb::raft::Node::Node(Config&& conf, ::std::string log){
             this->init(conf);
         }
         else{
-            if(conf.id != 0) this->raft = new Raft(conf.id, conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->heartbeatTimeout);
+            if(conf.id != 0) this->raft = new Raft(conf.id, conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->electionTimeout);
             //else this->raft = new Raft(common::Uniqueid::Instance().getUniqueid(), conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->heartbeatTimeout);
             this->init(conf);
         }
@@ -73,8 +73,8 @@ sapphiredb::raft::Node::~Node(){
 }
 
 void sapphiredb::raft::Node::init(Config& conf){
-    //lock the node
-    this->raft->becomeLocking();
+    //add new node
+    this->raft->stepDown(1, 0);
     this->kque->listenp();
 #ifdef LONG_CXX11
     for(auto it = conf.peers.begin(); it!=conf.peers.end(); ++it){
@@ -88,14 +88,14 @@ void sapphiredb::raft::Node::init(Config& conf){
     }
 #endif
 
-    sapphiredb::common::ThreadPool epoll_loop(1); //epoll loop thread
+    static sapphiredb::common::ThreadPool epoll_loop(1); //epoll loop thread
     epoll_loop.enqueue([this](){
         while(1){
             this->kque->loop_once(1000);
         }
     });
 
-    sapphiredb::common::ThreadPool trecv(1);
+    static sapphiredb::common::ThreadPool trecv(1);
     trecv.enqueue([this](){
         while(1){
             //TODO thread condition
@@ -103,7 +103,7 @@ void sapphiredb::raft::Node::init(Config& conf){
         }
     });
 
-    sapphiredb::common::ThreadPool tsend(1);
+    static sapphiredb::common::ThreadPool tsend(1);
     tsend.enqueue([this](){
         while(1){
             //TODO thread condition
@@ -113,8 +113,8 @@ void sapphiredb::raft::Node::init(Config& conf){
 }
 
 void sapphiredb::raft::Node::init(Config&& conf){
-    //lock the node
-    this->raft->becomeLocking();
+    //add new node
+    this->raft->stepDown(1, 0);
     this->kque->listenp();
 #ifdef LONG_CXX11
     for(auto it = conf.peers.begin(); it!=conf.peers.end(); ++it){
@@ -128,14 +128,14 @@ void sapphiredb::raft::Node::init(Config&& conf){
     }
 #endif
 
-    sapphiredb::common::ThreadPool epoll_loop(1); //epoll loop thread
+    static sapphiredb::common::ThreadPool epoll_loop(1); //epoll loop thread
     epoll_loop.enqueue([this](){
         while(1){
             this->kque->loop_once(1000);
         }
     });
 
-    sapphiredb::common::ThreadPool trecv(1);
+    static sapphiredb::common::ThreadPool trecv(1);
     trecv.enqueue([this](){
         while(1){
             //TODO thread condition
@@ -143,7 +143,7 @@ void sapphiredb::raft::Node::init(Config&& conf){
         }
     });
 
-    sapphiredb::common::ThreadPool tsend(1);
+    static sapphiredb::common::ThreadPool tsend(1);
     tsend.enqueue([this](){
         while(1){
             //TODO thread condition
@@ -153,10 +153,12 @@ void sapphiredb::raft::Node::init(Config&& conf){
 }
 
 void sapphiredb::raft::Node::run(){
-    sapphiredb::common::ThreadPool stepTask(1);
+    ::std::cerr << "run" << ::std::endl;
+    static sapphiredb::common::ThreadPool stepTask(1);
+    
     stepTask.enqueue([this]() {
             while(1){
-                raft->stepNode();
+                this->raft->stepNode();
             }
             });
     /*
@@ -167,7 +169,7 @@ void sapphiredb::raft::Node::run(){
             });
     */
     for(;;){
-        raft->tickNode();
+        this->raft->tickNode(this->raft);
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }

@@ -40,6 +40,14 @@ public:
     void becomeProbe();
     void becomeReplicate();
     void becomeSnapshot(uint64_t snapshoti);
+
+    inline static ::std::string name(ProgressStateType e){
+        switch(e){
+            case ProgressStateSnapshot: return "ProgressStateSnapshot";
+            case ProgressStateProbe: return "ProgressStateProbe";
+            case ProgressStateReplicate: return "ProgressStateReplicate";
+        }
+    }
 };
 } //namespace raft
 } //namespace sapphiredb
