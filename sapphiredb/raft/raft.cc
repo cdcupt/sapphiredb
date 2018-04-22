@@ -71,6 +71,7 @@ void sapphiredb::raft::tickHeartbeat(sapphiredb::raft::Raft* r){
             msg.set_type(raftpb::MsgCheckQuorum);
             try{
                 r->generalStep(msg);
+                //r->send(msg);
             }
             catch(...){
                 r->logger->error("generalStep filed in term {:d}", r->_currentTerm);
@@ -88,9 +89,10 @@ void sapphiredb::raft::tickHeartbeat(sapphiredb::raft::Raft* r){
         //++r->_lockingElapsed;
         raftpb::Message msg;
         msg.set_from(r->_id);
-        msg.set_type(raftpb::MsgHeartbeat);
+        msg.set_type(raftpb::MsgBeat);
         try{
             r->generalStep(msg);
+            //r->send(msg);
         }
         catch(...){
             r->logger->error("generalStep filed in term {:d}", r->_currentTerm);
@@ -129,6 +131,10 @@ void sapphiredb::raft::Raft::becomeLeader(){
     this->_state = STATE_LEADER;
     //TODO(Additional log)
     logger->warn("id : {:d} from candidate change to leader in term {:d}.", this->_id, this->_currentTerm);
+    this->forEachProgress(this->_prs, [this](sapphiredb::raft::Raft* _, uint64_t id, Progress& __){
+        ::std::cout << id << " ";
+    });
+    ::std::cout << ::std::endl;
 }
 /*
 void sapphiredb::raft::Raft::becomeLocking(){
@@ -169,7 +175,7 @@ void sapphiredb::raft::stepLocking(sapphiredb::raft::Raft* r, raftpb::Message ms
 */
 void sapphiredb::raft::stepLeader(sapphiredb::raft::Raft* r, raftpb::Message msg){
     switch(msg.type()){
-        case raftpb::MsgHeartbeat:
+        case raftpb::MsgBeat:
             {
                 r->bcastHeartbeat();
                 return;
@@ -485,8 +491,9 @@ void sapphiredb::raft::Raft::send(raftpb::Message msg){
         //TODO MsgProp MsgReadIndex
     }
 
-    //TODO message queue
+    //logger->warn("send msg {:s} to node {:d}", name(msg.type()), msg.to());
     this->_sendmsgs.push(msg);
+    //if(!this->_sendmsgs.empty()) if(msg.type() == 1) ::std::cout << "fuckkkkkkkkkk" << ::std::endl;
 }
 
 void sapphiredb::raft::Raft::sendHeartbeat(uint64_t to, std::string ctx){
@@ -517,11 +524,19 @@ void sapphiredb::raft::Raft::forEachProgress(::std::unordered_map<uint64_t, Prog
 
 void sapphiredb::raft::Raft::bcastHeartbeat(){
 #ifdef LONG_CXX11
-    auto fun = [](sapphiredb::raft::Raft* r, uint64_t id, sapphiredb::raft::Progress _) { if(id == r->_id) return; r->sendHeartbeat(id, ::std::string(""));};
+    auto fun = [](sapphiredb::raft::Raft* r, uint64_t id, sapphiredb::raft::Progress _) { 
+                                                                                    if(id == r->_id) return; 
+                                                                                    r->sendHeartbeat(id, ::std::string(""));
+                                                                                };
 #else
-    ::std::function<void(uint64_t id, sapphiredb::raft::Progress _)> fun = [](uint64_t id, Progress _) { if(id == this->_id) return; this->sendHeartbeat(id, std::string(""));};
+    ::std::function<void(uint64_t id, sapphiredb::raft::Progress _)> fun = [](sapphiredb::raft::Raft* r, uint64_t id, sapphiredb::raft::Progress _) { 
+                                                                                    if(id == r->_id) return; 
+                                                                                    r->sendHeartbeat(id, ::std::string(""));
+                                                                                };
 #endif
-    this->forEachProgress(this->_prs, fun);
+    if(!this->_prs.empty()){
+        this->forEachProgress(this->_prs, fun);
+    }
 }
 
 //message box approach sendAppend
@@ -628,7 +643,7 @@ void sapphiredb::raft::Raft::generalStep(raftpb::Message msg){
                 if(this->_state != sapphiredb::raft::STATE_LEADER){
                     logger->info("{:d} is starting a new election at term {:d}",
                                 this->_id, this->_currentTerm);
-                    
+
                     this->becomeCandidate();
                     if(this->quorum() == this->grantMe(this->_id, raftpb::MsgVoteResp, true)){
                         this->becomeLeader();
@@ -686,6 +701,16 @@ void sapphiredb::raft::Raft::generalStep(raftpb::Message msg){
                 }
                 break;
             }
+        case raftpb::MsgNode:
+            {
+                this->addNode(msg.from());
+                raftpb::Message tmsg;
+                tmsg.set_to(msg.from());
+                tmsg.set_term(msg.term());
+                tmsg.set_type(raftpb::MsgNodeResp);
+                this->send(tmsg);
+                break;
+            }
         default:
             try{
                 this->_step(this, msg);
@@ -697,7 +722,7 @@ void sapphiredb::raft::Raft::generalStep(raftpb::Message msg){
     }
 }
 
-void sapphiredb::raft::Raft::addNode(uint64_t to){
+void sapphiredb::raft::Raft::sendAddNode(uint64_t to){
     raftpb::Message msg;
     msg.set_type(raftpb::MsgNode);
     msg.set_from(this->_id);
@@ -711,11 +736,14 @@ void sapphiredb::raft::Raft::tickNode(sapphiredb::raft::Raft* r){
 }
 
 void sapphiredb::raft::Raft::stepNode(){
-    ::std::unique_lock<::std::mutex> lock(this->recvbuf_mutex);
     if(!this->_recvmsgs.empty()){
-        raftpb::Message msg = std::move(this->_recvmsgs.front());
-        this->_recvmsgs.pop();
-        _step(this, msg);
+        ::std::unique_lock<::std::mutex> lock(this->recvbuf_mutex);
+        if(!this->_recvmsgs.empty()){
+            raftpb::Message msg = std::move(this->_recvmsgs.front());
+            this->_recvmsgs.pop();
+            generalStep(msg);
+            //_step(this, msg);
+        }
     }
 }
 
@@ -740,6 +768,7 @@ raftpb::Message sapphiredb::raft::Raft::deserializeData(::std::string data){
     ::std::unique_lock<::std::mutex> lock(this->sendbuf_mutex);
     if(!this->_sendmsgs.empty()){
         raftpb::Message msg = std::move(this->_sendmsgs.front());
+        ::std::cout << "_sendmsgs: " << msg.type() << ::std::endl;
         this->_sendmsgs.pop();
         return serializeData(msg);
     }
@@ -747,9 +776,59 @@ raftpb::Message sapphiredb::raft::Raft::deserializeData(::std::string data){
     return "";
 }
 
-void sapphiredb::raft::Raft::tryPushRecvbuf(::std::string data){
-    ::std::unique_lock<::std::mutex> lock(this->recvbuf_mutex);
-    this->_recvmsgs.push(deserializeData(data));
+bool sapphiredb::raft::Raft::tryPushRecvbuf(::std::string data){
+    if(!data.empty()){
+        ::std::unique_lock<::std::mutex> lock(this->recvbuf_mutex);
+        if(!data.empty()){
+            this->_recvmsgs.push(deserializeData(data));
+            ::std::cout << "_recvmsgs: " << this->_recvmsgs.front().type() << ::std::endl;
+        }
+        return true;
+    }
+
+    return false;
+}
+
+void sapphiredb::raft::Raft::pushUnknownid(uint64_t& id){
+    std::unique_lock<std::mutex> lock(this->unknownid_mutex);
+    unknownid.push(id);
+}
+
+void sapphiredb::raft::Raft::pushUnknownid(int32_t&& id){
+    std::unique_lock<std::mutex> lock(this->unknownid_mutex);
+    unknownid.push(id);
+}
+
+int32_t sapphiredb::raft::Raft::popUnknownid(){
+    std::unique_lock<std::mutex> lock(this->unknownid_mutex);
+    int32_t id = unknownid.front();
+    unknownid.pop();
+    return id;
+}
+
+bool sapphiredb::raft::Raft::emptyUnknownid(){
+    return this->unknownid.empty();
+}
+
+void sapphiredb::raft::Raft::addNode(uint64_t id, bool isLeader){
+    if(this->_prs.find(id) == this->_prs.end()){
+        (this->_prs)[id].setMatch(0);
+        (this->_prs)[id].setNext(this->_lastApplied+1);
+        (this->_prs)[id].setRecentActive();
+        pushUnknownid(id);
+    }
+    else{
+        logger->warn("{:d} try to add a Repeated node {:d}", this->_id, id);
+    }
+}
+
+void sapphiredb::raft::Raft::deleteNode(uint64_t id){
+    if(this->_prs.find(id) != this->_prs.end()){
+        (this->_prs).erase(id);
+    }
+    else{
+        logger->warn("{:d} try delete {:d}, but it does not exist", this->_id, id);
+    }
 }
 
 sapphiredb::raft::Raft::Raft(uint64_t id, ::std::string path, uint32_t heartbeatTimeout, uint32_t electionTimeout) :

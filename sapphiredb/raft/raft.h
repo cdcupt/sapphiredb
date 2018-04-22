@@ -79,7 +79,7 @@ void tickElection(sapphiredb::raft::Raft* r);
 void tickHeartbeat(sapphiredb::raft::Raft* r);
 
 class Raft{
-private:
+public:
     //other members' information
     ::std::unordered_map<uint64_t, Progress> prs;
 
@@ -127,9 +127,11 @@ private:
     //message box
     ::std::queue<raftpb::Message> _sendmsgs;
     ::std::queue<raftpb::Message> _recvmsgs;
+    ::std::queue<uint64_t> unknownid;
 
-    std::mutex sendbuf_mutex;
-    std::mutex recvbuf_mutex;
+    ::std::mutex sendbuf_mutex;
+    ::std::mutex recvbuf_mutex;
+    ::std::mutex unknownid_mutex;
 
     uint32_t rand(uint32_t min, uint32_t max, uint32_t seed = 0);
     void resetRandomizedElectionTimeout();
@@ -184,12 +186,20 @@ public:
     void tickNode(sapphiredb::raft::Raft* r);
     void stepNode();
 
-    void addNode(uint64_t to);
+    void sendAddNode(uint64_t to);
 
     void stop();
 
     ::std::string tryPopSendbuf();
-    void tryPushRecvbuf(::std::string data);
+    bool tryPushRecvbuf(::std::string data);
+
+    void addNode(uint64_t id, bool isLeader = false);
+    void deleteNode(uint64_t id);
+
+    void pushUnknownid(uint64_t& id);
+    void pushUnknownid(int32_t&& id);
+    int32_t popUnknownid();
+    bool emptyUnknownid();
 
     inline ::std::string name(raftpb::MessageType e){
         switch(e){
@@ -206,6 +216,14 @@ public:
             case raftpb::MsgSnap: return "MsgSnap";
             case raftpb::MsgNode: return "MsgNode";
         }
+    }
+
+    inline bool isSendEmpty(){
+        return this->_sendmsgs.empty();
+    }
+
+    inline bool isRecvEmpty(){
+        return this->_recvmsgs.empty();
     }
 };
 } //namespace raft

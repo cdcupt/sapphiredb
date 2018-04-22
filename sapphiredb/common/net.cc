@@ -7,33 +7,45 @@ bool sapphiredb::common::Netcon::pushData(::std::string& data){
     if(sendbuf->len+data.size() > sendbuf->size) return false;
     else{
         ::std::lock_guard<::std::mutex> lock(this->buf_mutex);
-        int j = this->sendbuf->len;
-        for(auto ch : data){
-            (*(this->sendbuf->buf))[j++] = ch;
+        if(sendbuf->len+data.size() <= sendbuf->size){
+            int j = this->sendbuf->len;
+            for(auto ch : data){
+                (*(this->sendbuf->buf))[j++] = ch;
+                ++sendbuf->len;
+            }
+            (*(this->sendbuf->buf))[j] = '\0';
         }
-        sendbuf->len += data.size();
     }
+    ::std::cout << "&&this->sendbuf->len: " << this->sendbuf->len << ::std::endl;
+    ::std::cout << "&&this->sendbuf->buf: " << *(this->sendbuf->buf) << ::std::endl;
+    ::std::cout << "&&this->sendbuf->length: " << this->sendbuf->buf->length() << ::std::endl;
+    ::std::cout << "&&this->sendbuf->size: " << this->sendbuf->buf->size() << ::std::endl;
     return true;
 }
 bool sapphiredb::common::Netcon::pushData(::std::string&& data){
     if(sendbuf->len+data.size() > sendbuf->size) return false;
     else{
         ::std::lock_guard<::std::mutex> lock(this->buf_mutex);
-        int j = this->sendbuf->len;
-        for(auto ch : data){
-            (*(this->sendbuf->buf))[j++] = ch;
+        if(sendbuf->len+data.size() <= sendbuf->size){
+            int j = this->sendbuf->len;
+            for(auto ch : data){
+                (*(this->sendbuf->buf))[j++] = ch;
+                ++sendbuf->len;
+            }
+            (*(this->sendbuf->buf))[j] = '\0';
         }
-        sendbuf->len += data.size();
     }
     return true;
 }
 ::std::string sapphiredb::common::Netcon::popData(){
-    if(sendbuf->len <= 0) return "";
+    if(recvbuf->len <= 0) return "";
     else{
         ::std::lock_guard<::std::mutex> lock(this->buf_mutex);
-        uint32_t slen = sendbuf->len;
-        sendbuf->len = 0;
-        return ::std::string(this->sendbuf->buf->begin(), this->sendbuf->buf->begin()+slen);
+        if(recvbuf->len > 0){
+            uint32_t slen = recvbuf->len;
+            recvbuf->len = 0;
+            return ::std::string(this->recvbuf->buf->begin(), this->recvbuf->buf->begin()+slen);
+        }
     }
 }
 void sapphiredb::common::Netcon::clearSendbuf(){
@@ -45,6 +57,27 @@ void sapphiredb::common::Netcon::clearRecvbuf(){
     ::std::lock_guard<::std::mutex> lock(this->buf_mutex);
     recvbuf->buf->clear();
     recvbuf->len = 0;
+}
+
+void sapphiredb::common::Netcon::pushUnknownfd(int32_t& fd){
+    std::unique_lock<std::mutex> lock(this->unknownfd_mutex);
+    unknownfd.push(fd);
+}
+
+void sapphiredb::common::Netcon::pushUnknownfd(int32_t&& fd){
+    std::unique_lock<std::mutex> lock(this->unknownfd_mutex);
+    unknownfd.push(fd);
+}
+
+int32_t sapphiredb::common::Netcon::popUnknownfd(){
+    std::unique_lock<std::mutex> lock(this->unknownfd_mutex);
+    int32_t fd = unknownfd.front();
+    unknownfd.pop();
+    return fd;
+}
+
+bool sapphiredb::common::Netcon::emptyUnknownfd(){
+    return this->unknownfd.empty();
 }
 
 sapphiredb::common::Netcon::Netcon(::std::string addr, uint32_t port, NetType type, uint32_t bufsize){

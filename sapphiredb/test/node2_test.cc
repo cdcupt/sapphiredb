@@ -6,7 +6,7 @@
 #include <iostream>
 
 int main(){
-    sapphiredb::raft::Timeout* timeout = new sapphiredb::raft::Timeout(15, 150);
+    sapphiredb::raft::Timeout* timeout = new sapphiredb::raft::Timeout(500, 1500);
     ::std::vector<::std::pair<uint64_t, ::std::pair<::std::string, uint32_t>>> peers;
     peers.push_back(::std::pair<uint64_t, ::std::pair<::std::string, uint32_t>>(1, ::std::pair<::std::string, uint32_t>("127.0.0.1", 19997)));
     sapphiredb::raft::Config* conf = new sapphiredb::raft::Config(2, "", timeout, ::std::pair<::std::string, uint32_t>("127.0.0.1", 19998), peers);

@@ -46,12 +46,12 @@ sapphiredb::raft::Node::Node(Config&& conf, ::std::string log){
         //this->logger = spdlog::basic_logger_mt("logger", "raft_log");
         //uid = &common::Uniqueid::Instance();
         if(conf.timeout == nullptr && conf.raftlog.empty()){
-            if(conf.id != 0) this->raft = new Raft(conf.id);
+            /*if(conf.id != 0)*/ this->raft = new Raft(conf.id);
             //else this->raft = new Raft(common::Uniqueid::Instance().getUniqueid());
             this->init(conf);
         }
         else{
-            if(conf.id != 0) this->raft = new Raft(conf.id, conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->electionTimeout);
+            /*if(conf.id != 0)*/ this->raft = new Raft(conf.id, conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->electionTimeout);
             //else this->raft = new Raft(common::Uniqueid::Instance().getUniqueid(), conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->heartbeatTimeout);
             this->init(conf);
         }
@@ -63,7 +63,7 @@ sapphiredb::raft::Node::Node(Config&& conf, ::std::string log){
 
 sapphiredb::raft::Node::~Node(){
     try{
-        raft->stop();
+        raft->stop();//nothing to do
         delete uid;
         delete raft;
     }
@@ -74,17 +74,19 @@ sapphiredb::raft::Node::~Node(){
 
 void sapphiredb::raft::Node::init(Config& conf){
     //add new node
-    this->raft->stepDown(1, 0);
     this->kque->listenp();
+    this->raft->stepDown(1, 0);
 #ifdef LONG_CXX11
     for(auto it = conf.peers.begin(); it!=conf.peers.end(); ++it){
-        this->raft->addNode((*it).first);
         this->kque->conn(::std::move((*it).second.first), (*it).second.second, (*it).first);
+        this->raft->addNode((*it).first);
+        this->raft->sendAddNode((*it).first);
     }
 #else
     for(::std::vector<::std::pair<uint64_t, ::std::pair<::std::string, uint32_t>>>::iterator it = conf.peers.begin(); it!=conf.peers.end(); ++it){
-        this->raft->addNode((*it).first);
         this->kque->conn(::std::move((*it).second.first), (*it).second.second, (*it).first);
+        this->raft->addNode((*it).first);
+        this->raft->sendAddNode((*it).first);
     }
 #endif
 
@@ -98,33 +100,50 @@ void sapphiredb::raft::Node::init(Config& conf){
     static sapphiredb::common::ThreadPool trecv(1);
     trecv.enqueue([this](){
         while(1){
-            //TODO thread condition
-            this->raft->tryPushRecvbuf(this->kque->popData());
+            //::std::unique_lock<std::mutex> lock(this->trecv_mutex);
+            //this->tsend_condition.wait(lock, [this]{ return this->raft->isRecvEmpty(); });
+            if(this->raft->tryPushRecvbuf(this->kque->popData())){
+                //::std::cout << "Yeah" << ::std::endl;
+                this->tsend_condition.notify_one();
+            }
         }
     });
 
     static sapphiredb::common::ThreadPool tsend(1);
-    tsend.enqueue([this](){
+    tsend.enqueue([this, &conf](){
         while(1){
-            //TODO thread condition
+            //::std::unique_lock<std::mutex> lock(this->tsend_mutex);
+            //this->tsend_condition.wait(lock, [this]{ return !this->raft->isSendEmpty(); });
+            //if(this->raft->isSendEmpty()) continue;
+            
             this->kque->pushData(this->raft->tryPopSendbuf());
+            this->kque->funcPeerfd([this](::std::unordered_map<uint64_t, int32_t> peersfd){
+                for(::std::unordered_map<uint64_t, int32_t>::iterator it = peersfd.begin(); it != peersfd.end(); ++it){
+                    this->kque->send((*it).first);
+                }
+            });
+
+            //lock.unlock();
+            //this->tsend_condition.notify_one();
         }
     });
 }
 
 void sapphiredb::raft::Node::init(Config&& conf){
     //add new node
-    this->raft->stepDown(1, 0);
     this->kque->listenp();
+    this->raft->stepDown(1, 0);
 #ifdef LONG_CXX11
     for(auto it = conf.peers.begin(); it!=conf.peers.end(); ++it){
-        this->raft->addNode((*it).first);
         this->kque->conn(::std::move((*it).second.first), (*it).second.second, (*it).first);
+        this->raft->addNode((*it).first);
+        this->raft->sendAddNode((*it).first);
     }
 #else
-    for(::std::vector<uint64_t>::iterator it = conf.peers.begin(); it!=conf.peers.end(); ++it){
-        this->raft->addNode((*it).first);
+    for(::std::vector<::std::pair<uint64_t, ::std::pair<::std::string, uint32_t>>>::iterator it = conf.peers.begin(); it!=conf.peers.end(); ++it){
         this->kque->conn(::std::move((*it).second.first), (*it).second.second, (*it).first);
+        this->raft->addNode((*it).first);
+        this->raft->sendAddNode((*it).first);
     }
 #endif
 
@@ -138,35 +157,48 @@ void sapphiredb::raft::Node::init(Config&& conf){
     static sapphiredb::common::ThreadPool trecv(1);
     trecv.enqueue([this](){
         while(1){
-            //TODO thread condition
+            ::std::unique_lock<std::mutex> lock(this->trecv_mutex);
+            this->tsend_condition.wait(lock, [this]{ return this->raft->isRecvEmpty(); });
             this->raft->tryPushRecvbuf(this->kque->popData());
         }
     });
 
     static sapphiredb::common::ThreadPool tsend(1);
-    tsend.enqueue([this](){
+    tsend.enqueue([this, &conf](){
         while(1){
-            //TODO thread condition
+            ::std::unique_lock<std::mutex> lock(this->tsend_mutex);
+            this->tsend_condition.wait(lock, [this]{ return !this->raft->isSendEmpty(); });
             this->kque->pushData(this->raft->tryPopSendbuf());
+            this->kque->funcPeerfd([this](::std::unordered_map<uint64_t, int32_t> peersfd){
+                for(::std::unordered_map<uint64_t, int32_t>::iterator it = peersfd.begin(); it != peersfd.end(); ++it){
+                    this->kque->send((*it).first);
+                }
+            });
         }
     });
 }
 
 void sapphiredb::raft::Node::run(){
-    ::std::cerr << "run" << ::std::endl;
     static sapphiredb::common::ThreadPool stepTask(1);
     
     stepTask.enqueue([this]() {
             while(1){
+                //this->tsend_condition.wait(*trecv_lock, [this]{ return this->raft->isRecvEmpty(); });
+                while(!this->kque->emptyUnknownfd() && !this->raft->emptyUnknownid()){
+                    uint64_t id = this->raft->popUnknownid();
+                    int32_t fd = this->kque->popUnknownfd();
+                    ::std::cout << "id: " << id << " fd: " << fd << ::std::endl;
+                    this->kque->bindPeerfd(id, fd);
+                }
                 this->raft->stepNode();
             }
-            });
+        });
     /*
     kv.enqueue([this]() {
             while(1){
                 //TODO send append log msg
             }
-            });
+        });
     */
     for(;;){
         this->raft->tickNode(this->raft);

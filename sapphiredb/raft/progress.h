@@ -34,7 +34,9 @@ public:
     void setRecentActive();
     void resetRecentActive();
     uint64_t getMatch();
+    void setMatch(uint64_t match);
     uint64_t getNext();
+    void setNext(uint64_t next);
     void optimisticUpdate(uint64_t n);
 
     void becomeProbe();

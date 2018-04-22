@@ -262,16 +262,17 @@ void AddDescriptorsImpl() {
       "\n\010snapshot\030\t \001(\0132\020.raftpb.Snapshot\022\016\n\006re"
       "ject\030\n \001(\010\022\022\n\nrejectHint\030\013 \001(\004\022\017\n\007contex"
       "t\030\014 \001(\014*B\n\tEntryType\022\017\n\013EntryTrival\020\000\022\017\n"
-      "\013EntryNormal\020\001\022\023\n\017EntryConfChange\020\002*\317\001\n\013"
+      "\013EntryNormal\020\001\022\023\n\017EntryConfChange\020\002*\355\001\n\013"
       "MessageType\022\r\n\tMsgTrival\020\000\022\020\n\014MsgHeartbe"
       "at\020\001\022\024\n\020MsgHeartbeatResp\020\002\022\013\n\007MsgVote\020\003\022"
       "\017\n\013MsgVoteResp\020\004\022\n\n\006MsgApp\020\005\022\016\n\nMsgAppRe"
       "sp\020\006\022\n\n\006MsgHup\020\007\022\022\n\016MsgCheckQuorum\020\010\022\025\n\021"
       "MsgTransferLeader\020\t\022\013\n\007MsgSnap\020\n\022\013\n\007MsgN"
-      "ode\020\013b\006proto3"
+      "ode\020\013\022\017\n\013MsgNodeResp\020\014\022\013\n\007MsgBeat\020\rb\006pro"
+      "to3"
   };
   ::google::protobuf::DescriptorPool::InternalAddGeneratedFile(
-      descriptor, 853);
+      descriptor, 883);
   ::google::protobuf::MessageFactory::InternalRegisterGeneratedFile(
     "raftpb.proto", &protobuf_RegisterTypes);
 }
@@ -321,6 +322,8 @@ bool MessageType_IsValid(int value) {
     case 9:
     case 10:
     case 11:
+    case 12:
+    case 13:
       return true;
     default:
       return false;

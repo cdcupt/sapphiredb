@@ -52,7 +52,6 @@ private:
     int32_t epollfd;
     int32_t listenfd;
     ::std::unordered_map<uint64_t, int32_t> peersfd;
-    ::std::set<int32_t> unknownfd;
     ::std::queue<int32_t> readfd;
     int32_t rbind;
     ::std::mutex buf_mutex;
@@ -79,6 +78,8 @@ public:
     virtual void listenp(uint32_t listenq = 20) override;
     virtual void loop_once(uint32_t waitms) override; //kqueue loop
     void doSomething(std::function<void(int32_t fd)> task); //after read callback
+    void bindPeerfd(uint64_t, int32_t);
+    void funcPeerfd(std::function<void(::std::unordered_map<uint64_t, int32_t>&)> func);
 };
 } // namespace common
 } // namespace sapphiredb

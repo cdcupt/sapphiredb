@@ -20,7 +20,7 @@ void sapphiredb::common::Kqueue::updateEvents(int32_t efd, int32_t fd, int32_t e
     } else if (modify){
         EV_SET(&ev[n++], fd, EVFILT_WRITE, EV_DELETE, 0, 0, (void*)(intptr_t)fd);
     }
-    logger->info("update fd[{:d}] into kqueue", fd);
+    //logger->info("update fd[{:d}] into kqueue", fd);
     int32_t r = kevent(efd, ev, n, NULL, 0, NULL);
     exit_if(r, "kevent failed ");
 }
@@ -34,7 +34,7 @@ void sapphiredb::common::Kqueue::delete_event(int32_t efd, int32_t fd, int32_t e
     if (events & KQUEUE_WRITE_EVENT) {
         EV_SET(&ev[n++], fd, EVFILT_WRITE, EV_DELETE, 0, 0, (void*)(intptr_t)fd);
     }
-    logger->info("delete fd[{:d}] into kqueue", fd);
+    //logger->info("delete fd[{:d}] into kqueue", fd);
     int32_t r = kevent(efd, ev, n, NULL, 0, NULL);
     exit_if(r, "kevent failed ");
 }
@@ -48,13 +48,20 @@ void sapphiredb::common::Kqueue::connecttopeer(::std::string&& ip, uint32_t port
     inet_pton(AF_INET, ip.c_str(), &servaddr.sin_addr);
     bind(sockfd,(struct sockaddr *)&servaddr, sizeof(struct sockaddr));
     connect(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr));
-    if(id == 0) unknownfd.insert(sockfd);
-    else peersfd[id] = sockfd;
+    if(id == 0) {
+        logger->error("Do not support broadcast!");
+        //::std::cout << "sockfd: " << sockfd << ::std::endl;
+        //unknownfd.push(sockfd);
+    }
+    else {
+        peersfd[id] = sockfd;
+        ::std::cout << "id: " << id << " ## peersfd: " << peersfd[id] << ::std::endl;
+    }
     handleConnect(this->epollfd, sockfd);
 }
 
 void sapphiredb::common::Kqueue::handleAccept(int32_t efd, int32_t fd) {
-    //::std::cout << "****handleAccept****" << ::std::endl;
+    ::std::cout << "****handleAccept****" << ::std::endl;
     struct sockaddr_in raddr;
     socklen_t rsz = sizeof(raddr);
     int32_t cfd = accept(fd,(struct sockaddr *)&raddr,&rsz);
@@ -64,9 +71,10 @@ void sapphiredb::common::Kqueue::handleAccept(int32_t efd, int32_t fd) {
     int32_t r = getpeername(cfd, reinterpret_cast<struct sockaddr *>(&peer), &alen);
     exit_if(r<0, "getpeername failed");
     logger->info("accept a connection from {:s}", inet_ntoa(raddr.sin_addr));
-    unknownfd.insert(cfd);
+    pushUnknownfd(cfd);
     setNonBlock(cfd);
-    updateEvents(efd, cfd, KQUEUE_READ_EVENT|KQUEUE_WRITE_EVENT, false);
+    //updateEvents(efd, cfd, KQUEUE_READ_EVENT|KQUEUE_WRITE_EVENT, false);
+    updateEvents(efd, cfd, KQUEUE_READ_EVENT, false);
 }
 
 void sapphiredb::common::Kqueue::handleRead(int32_t efd, int32_t fd) {
@@ -75,16 +83,19 @@ void sapphiredb::common::Kqueue::handleRead(int32_t efd, int32_t fd) {
     int32_t n = 0;
     for(;;){
         while ((n=::read(fd, buf, sizeof(buf))) > 0) {
+            ::std::lock_guard<::std::mutex> lock(this->buf_mutex);
             if(n+this->recvbuf->len > this->recvbuf->size){
+                delete_event(efd, fd, KQUEUE_READ_EVENT);
                 logger->warn("buf is really fill when read fd[{:d}]", fd);
                 return;
             }
             else{
-                ::std::lock_guard<::std::mutex> lock(this->buf_mutex);
+                //logger->warn("got it");
                 int j = this->recvbuf->len;
                 for(int i=0; buf[i]!='\0'; ++i){
                     (*(this->recvbuf->buf))[j++] = buf[i];
                 }
+                //(*(this->recvbuf->buf))[j] = '\0';
                 this->recvbuf->len += n;
             }
         }
@@ -96,7 +107,7 @@ void sapphiredb::common::Kqueue::handleRead(int32_t efd, int32_t fd) {
         }
         
         if(n<0 && (errno == EAGAIN || errno == EWOULDBLOCK)){
-            logger->warn("Read fd[{:d}] EAGAIN", fd);
+            //logger->warn("Read fd[{:d}] EAGAIN", fd);
             std::unique_lock<std::mutex> lock(this->queue_mutex);
             this->readfd.emplace(fd);
             return;
@@ -111,12 +122,12 @@ void sapphiredb::common::Kqueue::handleRead(int32_t efd, int32_t fd) {
 void sapphiredb::common::Kqueue::handleWrite(int32_t efd, int32_t fd) {
     //::std::cout << "****handleWrite****" << ::std::endl;
     ::std::lock_guard<std::mutex> guard(this->buf_mutex);
-    ::std::string buf = ::std::move(*(this->sendbuf->buf));
+    ::std::string buf = ::std::string(this->sendbuf->buf->begin(), this->sendbuf->buf->begin()+this->sendbuf->len);
+    //::std::string buf = ::std::move(*(this->sendbuf->buf)); // terrible code
     for(;;){
-        
         int32_t r = ::write(fd, buf.c_str(), this->sendbuf->len); //写出读取的数据
         if(r<0 && (errno == EAGAIN || errno == EINTR)){
-            logger->warn("Write fd[{:d}] EAGAIN OR EINTR?", fd);
+            //logger->warn("Write fd[{:d}] EAGAIN OR EINTR?", fd);
             continue;
         }
         else if(r == 0){
@@ -138,7 +149,7 @@ void sapphiredb::common::Kqueue::handleWrite(int32_t efd, int32_t fd) {
 }
 
 void sapphiredb::common::Kqueue::handleConnect(int32_t efd, int32_t fd) {
-    //::std::cout << "****handleConnect****" << ::std::endl;
+    ::std::cout << "****handleConnect****" << ::std::endl;
     setNonBlock(fd);
     updateEvents(efd, fd, KQUEUE_READ_EVENT, false);
 }
@@ -183,9 +194,11 @@ void sapphiredb::common::Kqueue::kqueue_loop_once(int32_t efd, int32_t lfd, int3
 void sapphiredb::common::Kqueue::send(uint64_t id){
     if(this->sendbuf->len > 0){
         if(id == 0){
+            /*
             for(auto ufd : unknownfd){
                 updateEvents(this->epollfd, ufd, KQUEUE_WRITE_EVENT, false);
             }
+            */
         }
         else{
             updateEvents(this->epollfd, peersfd[id], KQUEUE_WRITE_EVENT, false);
@@ -195,9 +208,11 @@ void sapphiredb::common::Kqueue::send(uint64_t id){
 
 void sapphiredb::common::Kqueue::recv(uint64_t id){
     if(id == 0){
+        /*
         for(auto ufd : unknownfd){
             updateEvents(this->epollfd, ufd, KQUEUE_READ_EVENT, false);
         }
+        */
     }
     else{
         updateEvents(this->epollfd, peersfd[id], KQUEUE_READ_EVENT, false);
@@ -216,6 +231,16 @@ void sapphiredb::common::Kqueue::listenp(uint32_t listenq){
     listen(this->listenfd, listenq);
     this->setNonBlock(this->listenfd);
     this->updateEvents(this->epollfd, this->listenfd, KQUEUE_READ_EVENT, false);
+}
+
+void sapphiredb::common::Kqueue::bindPeerfd(uint64_t id, int32_t fd){
+    if(peersfd.find(id) == peersfd.end()){
+        peersfd[id] = fd;
+    }
+}
+
+void sapphiredb::common::Kqueue::funcPeerfd(std::function<void(::std::unordered_map<uint64_t, int32_t>& peersfd)> func){
+    func(this->peersfd);
 }
 
 sapphiredb::common::Kqueue::Kqueue(::std::string ip, uint32_t port, NetType type, uint32_t bufsize, uint32_t fdsize, uint32_t listenq)
@@ -249,8 +274,9 @@ sapphiredb::common::Kqueue::~Kqueue(){
     for(auto peerfd : this->peersfd){
         close(peerfd.second);
     }
-    for(auto ufd : this->unknownfd){
-        close(ufd);
+    while(!this->unknownfd.empty()){
+        close(this->unknownfd.front());
+        this->unknownfd.pop();
     }
     while(!this->readfd.empty()){
         std::unique_lock<std::mutex> lock(this->queue_mutex);

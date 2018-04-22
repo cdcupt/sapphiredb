@@ -115,12 +115,14 @@ enum MessageType {
   MsgTransferLeader = 9,
   MsgSnap = 10,
   MsgNode = 11,
+  MsgNodeResp = 12,
+  MsgBeat = 13,
   MessageType_INT_MIN_SENTINEL_DO_NOT_USE_ = ::google::protobuf::kint32min,
   MessageType_INT_MAX_SENTINEL_DO_NOT_USE_ = ::google::protobuf::kint32max
 };
 bool MessageType_IsValid(int value);
 const MessageType MessageType_MIN = MsgTrival;
-const MessageType MessageType_MAX = MsgNode;
+const MessageType MessageType_MAX = MsgBeat;
 const int MessageType_ARRAYSIZE = MessageType_MAX + 1;
 
 const ::google::protobuf::EnumDescriptor* MessageType_descriptor();

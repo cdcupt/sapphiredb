@@ -43,6 +43,8 @@ enum MessageType {
     MsgTransferLeader = 9;
     MsgSnap = 10;
     MsgNode = 11;
+    MsgNodeResp = 12;
+    MsgBeat = 13;
 }
 
 message Message {

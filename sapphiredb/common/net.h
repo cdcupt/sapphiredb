@@ -5,6 +5,7 @@
 #include <iostream>
 #include <mutex>
 #include <utility>
+#include <queue>
 
 namespace sapphiredb
 {
@@ -13,6 +14,7 @@ namespace common
 class Netcon{
 private:
     ::std::mutex buf_mutex;
+    ::std::mutex unknownfd_mutex;
 protected:
     class Data{
     public:
@@ -59,9 +61,15 @@ public:
     ::std::string popData();
     void clearSendbuf();
     void clearRecvbuf();
+
+    void pushUnknownfd(int32_t& fd);
+    void pushUnknownfd(int32_t&& fd);
+    int32_t popUnknownfd();
+    bool emptyUnknownfd();
 protected:
     Data* recvbuf;
     Data* sendbuf;
+    ::std::queue<int32_t> unknownfd;
 };
 }
 }

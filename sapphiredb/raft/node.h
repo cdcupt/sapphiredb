@@ -5,6 +5,12 @@
 #include <queue>
 #include <utility>
 #include <string>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <future>
+#include <functional>
+#include <stdexcept>
 
 #include "raft/raft.h"
 #include "common/thread_pool.h"
@@ -44,6 +50,14 @@ private:
     common::Uniqueid* uid;
     ::std::shared_ptr<spdlog::logger> logger;
     sapphiredb::common::Kqueue* kque;
+
+    //send thread mutex and condition
+    ::std::mutex tsend_mutex;
+    ::std::condition_variable tsend_condition;
+
+    //receive thread mutex and condition
+    ::std::mutex trecv_mutex;
+    ::std::condition_variable trecv_condition;
 
     void init(Config& conf);
     void init(Config&& conf);

@@ -43,8 +43,16 @@ uint64_t sapphiredb::raft::Progress::getMatch(){
     return this->_match;
 }
 
+void sapphiredb::raft::Progress::setMatch(uint64_t match){
+    this->_match = match;
+}
+
 uint64_t sapphiredb::raft::Progress::getNext(){
     return this->_next;
+}
+
+void sapphiredb::raft::Progress::setNext(uint64_t next){
+    this->_next = next;
 }
 
 void sapphiredb::raft::Progress::optimisticUpdate(uint64_t n){

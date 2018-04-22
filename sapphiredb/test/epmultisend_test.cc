@@ -10,9 +10,9 @@
 #include <iostream>
 
 int main(){
-    sapphiredb::common::Netcon* kque = new sapphiredb::common::Kqueue("127.0.0.1", 19997, sapphiredb::common::Netcon::IPV4, 10, 1024, 20);
+    sapphiredb::common::Netcon* kque = new sapphiredb::common::Kqueue("127.0.0.1", 19998, sapphiredb::common::Netcon::IPV4, 10, 1024, 20);
     kque->listenp();
-    kque->conn("127.0.0.1", 19998, 0);
+    kque->conn("127.0.0.1", 19997, 1);
     sapphiredb::common::ThreadPool epoll_loop(1);
     epoll_loop.enqueue([&](){
             while(1){
@@ -40,7 +40,7 @@ int main(){
             continue;
         }
         ::std::cout << "****send******" << ::std::endl;
-        kque->send(0);
+        kque->send(1);
     }
 
 
