@@ -4,7 +4,8 @@ sapphiredb::common::Netcon::Data* sapphiredb::common::Netcon::getData(){
     return recvbuf;
 }
 bool sapphiredb::common::Netcon::pushData(::std::string& data){
-    if(sendbuf->len+data.size() > sendbuf->size) return false;
+    if(sendbuf->len > 0) return false;
+    else if(sendbuf->len+data.size() > sendbuf->size) return false;
     else{
         ::std::lock_guard<::std::mutex> lock(this->buf_mutex);
         if(sendbuf->len+data.size() <= sendbuf->size){
@@ -16,14 +17,11 @@ bool sapphiredb::common::Netcon::pushData(::std::string& data){
             (*(this->sendbuf->buf))[j] = '\0';
         }
     }
-    ::std::cout << "&&this->sendbuf->len: " << this->sendbuf->len << ::std::endl;
-    ::std::cout << "&&this->sendbuf->buf: " << *(this->sendbuf->buf) << ::std::endl;
-    ::std::cout << "&&this->sendbuf->length: " << this->sendbuf->buf->length() << ::std::endl;
-    ::std::cout << "&&this->sendbuf->size: " << this->sendbuf->buf->size() << ::std::endl;
     return true;
 }
 bool sapphiredb::common::Netcon::pushData(::std::string&& data){
-    if(sendbuf->len+data.size() > sendbuf->size) return false;
+    if(sendbuf->len > 0) return false;
+    else if(sendbuf->len+data.size() > sendbuf->size) return false;
     else{
         ::std::lock_guard<::std::mutex> lock(this->buf_mutex);
         if(sendbuf->len+data.size() <= sendbuf->size){

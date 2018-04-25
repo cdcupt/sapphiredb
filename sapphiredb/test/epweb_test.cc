@@ -90,7 +90,7 @@ int main(){
         while(1){
             kque->doSomething([&](int32_t fd){
                 //::std::cout << *(kque->getData()->buf) << ::std::endl;
-                serve_file(fd, "../webdocs/index.html");
+                serve_file(fd, "../test/webdocs/index.html");
             });
         }
     });

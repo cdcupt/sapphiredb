@@ -133,6 +133,9 @@ public:
     ::std::mutex recvbuf_mutex;
     ::std::mutex unknownid_mutex;
 
+    ::std::mutex node_mutex;
+    ::std::condition_variable node_condition;
+
     uint32_t rand(uint32_t min, uint32_t max, uint32_t seed = 0);
     void resetRandomizedElectionTimeout();
     void reset(uint64_t term);
@@ -215,6 +218,8 @@ public:
             case raftpb::MsgTransferLeader: return "MsgTransferLeader";
             case raftpb::MsgSnap: return "MsgSnap";
             case raftpb::MsgNode: return "MsgNode";
+            case raftpb::MsgNodeResp: return "MsgNodeResp";
+            default: return "unknownType";
         }
     }
 

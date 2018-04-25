@@ -9,9 +9,9 @@
 #include <iostream>
 
 int main(){
-    sapphiredb::common::Netcon* kque = new sapphiredb::common::Kqueue("127.0.0.1", 19998, sapphiredb::common::Netcon::IPV4, 10, 1024, 20);
+    sapphiredb::common::Netcon* kque = new sapphiredb::common::Kqueue("127.0.0.1", 19990, sapphiredb::common::Netcon::IPV4, 10, 1024, 20);
     kque->listenp();
-    kque->conn("127.0.0.1", 19999, 0);
+    kque->conn("127.0.0.1", 19997, 0);
     sapphiredb::common::ThreadPool epoll_loop(1);
     epoll_loop.enqueue([&](){
             while(1){

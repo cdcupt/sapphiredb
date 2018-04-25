@@ -53,6 +53,7 @@ private:
     int32_t listenfd;
     ::std::unordered_map<uint64_t, int32_t> peersfd;
     ::std::queue<int32_t> readfd;
+    ::std::vector<int32_t> bcastfd;
     int32_t rbind;
     ::std::mutex buf_mutex;
     ::std::mutex queue_mutex;

@@ -491,7 +491,7 @@ void sapphiredb::raft::Raft::send(raftpb::Message msg){
         //TODO MsgProp MsgReadIndex
     }
 
-    //logger->warn("send msg {:s} to node {:d}", name(msg.type()), msg.to());
+    if(msg.type() == 12) logger->warn("send msg {:s} to node {:d}", name(msg.type()), msg.to());
     this->_sendmsgs.push(msg);
     //if(!this->_sendmsgs.empty()) if(msg.type() == 1) ::std::cout << "fuckkkkkkkkkk" << ::std::endl;
 }
@@ -704,6 +704,7 @@ void sapphiredb::raft::Raft::generalStep(raftpb::Message msg){
         case raftpb::MsgNode:
             {
                 this->addNode(msg.from());
+                this->pushUnknownid(msg.from());
                 raftpb::Message tmsg;
                 tmsg.set_to(msg.from());
                 tmsg.set_term(msg.term());
@@ -768,7 +769,7 @@ raftpb::Message sapphiredb::raft::Raft::deserializeData(::std::string data){
     ::std::unique_lock<::std::mutex> lock(this->sendbuf_mutex);
     if(!this->_sendmsgs.empty()){
         raftpb::Message msg = std::move(this->_sendmsgs.front());
-        ::std::cout << "_sendmsgs: " << msg.type() << ::std::endl;
+        ::std::cout << "_sendmsgs: " << name(msg.type()) << ::std::endl;
         this->_sendmsgs.pop();
         return serializeData(msg);
     }
@@ -781,7 +782,7 @@ bool sapphiredb::raft::Raft::tryPushRecvbuf(::std::string data){
         ::std::unique_lock<::std::mutex> lock(this->recvbuf_mutex);
         if(!data.empty()){
             this->_recvmsgs.push(deserializeData(data));
-            ::std::cout << "_recvmsgs: " << this->_recvmsgs.front().type() << ::std::endl;
+            ::std::cout << "_recvmsgs: " << name(this->_recvmsgs.front().type()) << ::std::endl;
         }
         return true;
     }
@@ -815,7 +816,6 @@ void sapphiredb::raft::Raft::addNode(uint64_t id, bool isLeader){
         (this->_prs)[id].setMatch(0);
         (this->_prs)[id].setNext(this->_lastApplied+1);
         (this->_prs)[id].setRecentActive();
-        pushUnknownid(id);
     }
     else{
         logger->warn("{:d} try to add a Repeated node {:d}", this->_id, id);
