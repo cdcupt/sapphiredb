@@ -19,17 +19,17 @@ sapphiredb::raft::Config::~Config(){
 
 sapphiredb::raft::Node::Node(Config& conf, ::std::string log){
     try{
-        this->kque = new sapphiredb::common::Kqueue(conf.socket.first, conf.socket.second, sapphiredb::common::Netcon::IPV4, 1024, 1024, 100);
+        this->kque = new sapphiredb::common::Kqueue(conf.socket.first, conf.socket.second, sapphiredb::common::Netcon::IPV4, 1024, 1024, 100, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition));
         this->logger = spdlog::stdout_color_mt("node_console");
         //this->logger = spdlog::basic_logger_mt("logger", "raft_log");
         //uid = &common::Uniqueid::Instance();
         if(conf.timeout == nullptr && conf.raftlog.empty()){
-            if(conf.id != 0) this->raft = new Raft(conf.id);
+            if(conf.id != 0) this->raft = new Raft(conf.id, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition));
             //else this->raft = new Raft(common::Uniqueid::Instance().getUniqueid());
             this->init(conf);
         }
         else{
-            if(conf.id != 0) this->raft = new Raft(conf.id, conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->electionTimeout);
+            if(conf.id != 0) this->raft = new Raft(conf.id, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition), conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->electionTimeout);
             //else this->raft = new Raft(common::Uniqueid::Instance().getUniqueid(), conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->heartbeatTimeout);
             this->init(conf);
         }
@@ -41,17 +41,17 @@ sapphiredb::raft::Node::Node(Config& conf, ::std::string log){
 
 sapphiredb::raft::Node::Node(Config&& conf, ::std::string log){
     try{
-        this->kque = new sapphiredb::common::Kqueue(conf.socket.first, conf.socket.second, sapphiredb::common::Netcon::IPV4, 1024, 1024, 100);
+        this->kque = new sapphiredb::common::Kqueue(conf.socket.first, conf.socket.second, sapphiredb::common::Netcon::IPV4, 1024, 1024, 100, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition));
         this->logger = spdlog::stdout_color_mt("node_console");
         //this->logger = spdlog::basic_logger_mt("logger", "raft_log");
         //uid = &common::Uniqueid::Instance();
         if(conf.timeout == nullptr && conf.raftlog.empty()){
-            /*if(conf.id != 0)*/ this->raft = new Raft(conf.id);
+            /*if(conf.id != 0)*/ this->raft = new Raft(conf.id, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition));
             //else this->raft = new Raft(common::Uniqueid::Instance().getUniqueid());
             this->init(conf);
         }
         else{
-            /*if(conf.id != 0)*/ this->raft = new Raft(conf.id, conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->electionTimeout);
+            /*if(conf.id != 0)*/ this->raft = new Raft(conf.id, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition), conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->electionTimeout);
             //else this->raft = new Raft(common::Uniqueid::Instance().getUniqueid(), conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->heartbeatTimeout);
             this->init(conf);
         }
@@ -100,8 +100,9 @@ void sapphiredb::raft::Node::init(Config& conf){
     static sapphiredb::common::ThreadPool trecv(1);
     trecv.enqueue([this](){
         while(1){
-            //::std::unique_lock<std::mutex> lock(this->trecv_mutex);
-            //this->tsend_condition.wait(lock, [this]{ return this->raft->isRecvEmpty(); });
+            ::std::unique_lock<std::mutex> lock(this->trecv_mutex);
+            this->trecv_condition.wait(lock, [this]{ return !this->kque->isRecvEmpty(); });
+
             if(this->raft->tryPushRecvbuf(this->kque->popData())){
                 this->tsend_condition.notify_one();
             }
@@ -112,8 +113,8 @@ void sapphiredb::raft::Node::init(Config& conf){
     static sapphiredb::common::ThreadPool tsend(1);
     tsend.enqueue([this, &conf](){
         while(1){
-            //::std::unique_lock<std::mutex> lock(this->tsend_mutex);
-            //this->tsend_condition.wait(lock, [this]{ return !this->raft->isSendEmpty(); });
+            ::std::unique_lock<std::mutex> lock(this->tsend_mutex);
+            this->tsend_condition.wait(lock, [this]{ return !this->raft->isSendEmpty(); });
             //if(this->raft->isSendEmpty()) continue;
             ::std::string msg = this->raft->tryPopSendbuf();
             if(!msg.empty()){
@@ -125,8 +126,8 @@ void sapphiredb::raft::Node::init(Config& conf){
                 });
             }
 
-            //lock.unlock();
-            //this->tsend_condition.notify_one();
+            lock.unlock();
+            this->tsend_condition.notify_one();
         }
     });
 }
@@ -160,14 +161,19 @@ void sapphiredb::raft::Node::init(Config&& conf){
     trecv.enqueue([this](){
         while(1){
             ::std::unique_lock<std::mutex> lock(this->trecv_mutex);
-            this->tsend_condition.wait(lock, [this]{ return this->raft->isRecvEmpty(); });
-            this->raft->tryPushRecvbuf(this->kque->popData());
+            this->trecv_condition.wait(lock, [this]{ return this->raft->isRecvEmpty(); });
+            if(this->raft->tryPushRecvbuf(this->kque->popData())){
+                this->tsend_condition.notify_one();
+            }
         }
     });
 
     static sapphiredb::common::ThreadPool tsend(1);
     tsend.enqueue([this, &conf](){
         while(1){
+            ::std::unique_lock<std::mutex> lock(this->tsend_mutex);
+            this->tsend_condition.wait(lock, [this]{ return !this->raft->isSendEmpty(); });
+
             ::std::string msg = this->raft->tryPopSendbuf();
             if(!msg.empty()){
                 this->kque->funcPeerfd([this, &msg](::std::unordered_map<uint64_t, int32_t> peersfd){
@@ -177,22 +183,35 @@ void sapphiredb::raft::Node::init(Config&& conf){
                     }
                 });
             }
+
+            lock.unlock();
+            this->tsend_condition.notify_one();
         }
     });
 }
 
 void sapphiredb::raft::Node::run(){
-    static sapphiredb::common::ThreadPool stepTask(1);
-    
-    stepTask.enqueue([this]() {
+    static sapphiredb::common::ThreadPool bindTask(1);
+    bindTask.enqueue([this]() {
         while(1){
-            //this->tsend_condition.wait(*trecv_lock, [this]{ return this->raft->isRecvEmpty(); });
+            ::std::unique_lock<std::mutex> lock(this->tbind_mutex);
+            this->tbind_condition.wait(lock, [this]{ return !this->kque->emptyUnknownfd() && !this->raft->emptyUnknownid(); });
+
             while(!this->kque->emptyUnknownfd() && !this->raft->emptyUnknownid()){
                 uint64_t id = this->raft->popUnknownid();
                 int32_t fd = this->kque->popUnknownfd();
                 this->kque->bindPeerfd(id, fd);
                 logger->error("id: {:d} | fd: {:d}", id, fd);
             }
+        }
+    });
+
+    static sapphiredb::common::ThreadPool stepTask(1);
+    stepTask.enqueue([this]() {
+        while(1){
+            ::std::unique_lock<std::mutex> lock(this->tstep_mutex);
+            this->tstep_condition.wait(lock, [this]{ return !this->raft->isRecvEmpty(); });
+
             this->raft->stepNode();
         }
     });

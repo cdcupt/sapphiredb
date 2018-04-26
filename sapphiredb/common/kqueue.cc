@@ -76,6 +76,7 @@ void sapphiredb::common::Kqueue::handleAccept(int32_t efd, int32_t fd) {
     setNonBlock(cfd);
     //updateEvents(efd, cfd, KQUEUE_READ_EVENT|KQUEUE_WRITE_EVENT, false);
     updateEvents(efd, cfd, KQUEUE_READ_EVENT, false);
+    this->node_bind_condition->notify_all();
 }
 
 void sapphiredb::common::Kqueue::handleRead(int32_t efd, int32_t fd) {
@@ -110,6 +111,7 @@ void sapphiredb::common::Kqueue::handleRead(int32_t efd, int32_t fd) {
             //logger->warn("Read fd[{:d}] EAGAIN", fd);
             std::unique_lock<std::mutex> lock(this->queue_mutex);
             this->readfd.emplace(fd);
+            this->node_recv_condition->notify_all();
             return;
         }
         if(n<0 && (errno == EINTR)){
@@ -239,7 +241,9 @@ void sapphiredb::common::Kqueue::funcPeerfd(std::function<void(::std::unordered_
     func(this->peersfd);
 }
 
-sapphiredb::common::Kqueue::Kqueue(::std::string ip, uint32_t port, NetType type, uint32_t bufsize, uint32_t fdsize, uint32_t listenq)
+sapphiredb::common::Kqueue::Kqueue(::std::string ip, uint32_t port, NetType type, uint32_t bufsize, uint32_t fdsize, uint32_t listenq,
+    ::std::condition_variable* tsend_condition, ::std::condition_variable* trecv_condition,
+    ::std::condition_variable* tbind_condition, ::std::condition_variable* tstep_condition)
     : Netcon(ip, port, type, bufsize){
     ::signal(SIGPIPE, SIG_IGN);
     try{
@@ -258,6 +262,11 @@ sapphiredb::common::Kqueue::Kqueue(::std::string ip, uint32_t port, NetType type
         //this->logger = spdlog::basic_logger_mt("logger", "kqueue_log.txt"); 
         this->logger = spdlog::stdout_color_mt("kqueue_console");
         //this->logger = spdlog::rotating_logger_mt("logger", "kqueue_log.txt", 1048576 * 5, 3);
+
+        this->node_send_condition = tsend_condition;
+        this->node_recv_condition = trecv_condition;
+        this->node_bind_condition = tbind_condition;
+        this->node_step_condition = tstep_condition;
     }
     catch(...){
         ::std::cerr << "epoll alloc fd error" << ::std::endl;

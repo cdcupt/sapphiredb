@@ -59,6 +59,14 @@ private:
     ::std::mutex trecv_mutex;
     ::std::condition_variable trecv_condition;
 
+    //receive thread mutex and condition
+    ::std::mutex tbind_mutex;
+    ::std::condition_variable tbind_condition;
+
+    //receive thread mutex and condition
+    ::std::mutex tstep_mutex;
+    ::std::condition_variable tstep_condition;
+
     void init(Config& conf);
     void init(Config&& conf);
 public:

@@ -133,8 +133,10 @@ public:
     ::std::mutex recvbuf_mutex;
     ::std::mutex unknownid_mutex;
 
-    ::std::mutex node_mutex;
-    ::std::condition_variable node_condition;
+    ::std::condition_variable* node_send_condition;
+    ::std::condition_variable* node_recv_condition;
+    ::std::condition_variable* node_bind_condition;
+    ::std::condition_variable* node_step_condition;
 
     uint32_t rand(uint32_t min, uint32_t max, uint32_t seed = 0);
     void resetRandomizedElectionTimeout();
@@ -157,7 +159,9 @@ public:
     raftpb::Message deserializeData(::std::string data);
 
 public:
-    Raft(uint64_t id, ::std::string path = "./raft_log", uint32_t heartbeatTimeout = 10, uint32_t electionTimeout = 150);
+    Raft(uint64_t id, ::std::condition_variable* tsend_condition = nullptr, ::std::condition_variable* trecv_condition = nullptr,
+        ::std::condition_variable* tbind_condition = nullptr, ::std::condition_variable* tstep_condition = nullptr,
+        ::std::string path = "./raft_log", uint32_t heartbeatTimeout = 10, uint32_t electionTimeout = 150);
     ~Raft();
 
     friend void stepLeader(sapphiredb::raft::Raft* r, raftpb::Message msg);

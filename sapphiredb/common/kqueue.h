@@ -59,6 +59,11 @@ private:
     ::std::mutex queue_mutex;
     std::shared_ptr<spdlog::logger> logger;
 
+    ::std::condition_variable* node_send_condition;
+    ::std::condition_variable* node_recv_condition;
+    ::std::condition_variable* node_bind_condition;
+    ::std::condition_variable* node_step_condition;
+
     void setNonBlock(int32_t fd);
     void updateEvents(int32_t efd, int32_t fd, int32_t events, bool modify);
     void delete_event(int32_t efd, int32_t fd, int32_t events);
@@ -69,7 +74,9 @@ private:
     void handleConnect(int32_t efd, int32_t fd);
     void kqueue_loop_once(int32_t efd, int32_t lfd, int32_t waitms);
 public:
-    Kqueue(::std::string ip, uint32_t port, NetType type, uint32_t bufsize, uint32_t fdsize, uint32_t listenq);
+    Kqueue(::std::string ip, uint32_t port, NetType type, uint32_t bufsize, uint32_t fdsize, uint32_t listenq,
+        ::std::condition_variable* tsend_condition = nullptr, ::std::condition_variable* trecv_condition = nullptr,
+        ::std::condition_variable* tbind_condition = nullptr, ::std::condition_variable* tstep_condition = nullptr);
     virtual ~Kqueue() override;
 
     //interface
@@ -81,6 +88,14 @@ public:
     void doSomething(std::function<void(int32_t fd)> task); //after read callback
     void bindPeerfd(uint64_t, int32_t);
     void funcPeerfd(std::function<void(::std::unordered_map<uint64_t, int32_t>&)> func);
+
+    inline bool isRecvEmpty(){
+        return this->recvbuf->len <= 0;
+    }
+
+    inline bool isSendEmpty(){
+        return this->sendbuf->len <= 0;
+    }
 };
 } // namespace common
 } // namespace sapphiredb

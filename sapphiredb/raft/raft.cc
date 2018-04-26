@@ -493,6 +493,7 @@ void sapphiredb::raft::Raft::send(raftpb::Message msg){
 
     if(msg.type() == 12) logger->warn("send msg {:s} to node {:d}", name(msg.type()), msg.to());
     this->_sendmsgs.push(msg);
+    node_send_condition->notify_all();
     //if(!this->_sendmsgs.empty()) if(msg.type() == 1) ::std::cout << "fuckkkkkkkkkk" << ::std::endl;
 }
 
@@ -710,6 +711,7 @@ void sapphiredb::raft::Raft::generalStep(raftpb::Message msg){
                 tmsg.set_term(msg.term());
                 tmsg.set_type(raftpb::MsgNodeResp);
                 this->send(tmsg);
+                this->node_bind_condition->notify_all();
                 break;
             }
         default:
@@ -783,6 +785,7 @@ bool sapphiredb::raft::Raft::tryPushRecvbuf(::std::string data){
         if(!data.empty()){
             this->_recvmsgs.push(deserializeData(data));
             ::std::cout << "_recvmsgs: " << name(this->_recvmsgs.front().type()) << ::std::endl;
+            this->node_step_condition->notify_all();
         }
         return true;
     }
@@ -831,7 +834,9 @@ void sapphiredb::raft::Raft::deleteNode(uint64_t id){
     }
 }
 
-sapphiredb::raft::Raft::Raft(uint64_t id, ::std::string path, uint32_t heartbeatTimeout, uint32_t electionTimeout) :
+sapphiredb::raft::Raft::Raft(uint64_t id, ::std::condition_variable* tsend_condition, ::std::condition_variable* trecv_condition,
+    ::std::condition_variable* tbind_condition, ::std::condition_variable* tstep_condition,
+    ::std::string path, uint32_t heartbeatTimeout, uint32_t electionTimeout) :
     _currentTerm(0), _vote(0), _id(id), _leader(0), isLeader(false), _state(sapphiredb::raft::STATE_FOLLOWER), _commitIndex(0), _lastApplied(0),
     _heartbeatElapsed(0), _heartbeatTimeout(heartbeatTimeout), _electionTimeout(electionTimeout), _electionElapsed(0),
     _step(sapphiredb::raft::stepFollower), _tick(sapphiredb::raft::tickElection), _checkQuorum(false){
@@ -842,6 +847,11 @@ sapphiredb::raft::Raft::Raft(uint64_t id, ::std::string path, uint32_t heartbeat
         this->logger = spdlog::stdout_color_mt("raft_console");
 
         this->resetRandomizedElectionTimeout();
+
+        this->node_send_condition = tsend_condition;
+        this->node_recv_condition = trecv_condition;
+        this->node_bind_condition = tbind_condition;
+        this->node_step_condition = tstep_condition;
     }
     catch(...){
         ::std::cout << "some alloc error" << ::std::endl;
