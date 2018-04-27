@@ -103,6 +103,12 @@ void sapphiredb::common::Kqueue::handleRead(int32_t efd, int32_t fd) {
         
         if(n == 0){
             delete_event(efd, fd, KQUEUE_READ_EVENT);
+            for(::std::unordered_map<uint64_t, int32_t>::iterator peer = peersfd.begin(); peer != peersfd.end(); ++peer){
+                if(peer->second == fd){
+                    peersfd.erase(peer);
+                    break;
+                }
+            }
             logger->warn("fd[{:d}] socket closed!", fd);
             return;
         }

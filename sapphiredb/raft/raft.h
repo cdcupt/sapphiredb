@@ -42,30 +42,41 @@ class Raft;
 class Raftlog;
 class Progress;
 
+class Sendstruct{
+public:
+    ::std::string msg;
+    uint64_t to;
+
+    inline Sendstruct(::std::string data, uint64_t id){
+        this->msg = data;
+        this->to = id;
+    }
+};
+
 class Entrie{
 private:
     uint64_t _index;
     uint64_t _term;
     ::std::string _opt;
 public:
-    uint64_t getTerm(){
+    inline uint64_t getTerm(){
         return this->_term;
     }
-    void setTerm(uint64_t term){
+    inline void setTerm(uint64_t term){
         this->_term = term;
     }
 
-    uint64_t getIndex(){
+    inline uint64_t getIndex(){
         return this->_index;
     }
-    void setIndex(uint64_t index){
+    inline void setIndex(uint64_t index){
         this->_index = index;
     }
 
-    ::std::string getOpt(){
+    inline ::std::string getOpt(){
         return this->_opt;
     }
-    void setOpt(::std::string opt){
+    inline void setOpt(::std::string opt){
         this->_opt = opt;
     }
 };
@@ -187,6 +198,7 @@ public:
     void sendAppend(uint64_t to);
 
     void bcastHeartbeat();
+    void bcastHeartbeat_fast();
     void bcastAppend();
 
     //general API
@@ -197,7 +209,7 @@ public:
 
     void stop();
 
-    ::std::string tryPopSendbuf();
+    sapphiredb::raft::Sendstruct tryPopSendbuf();
     bool tryPushRecvbuf(::std::string data);
 
     void addNode(uint64_t id, bool isLeader = false);

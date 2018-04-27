@@ -106,7 +106,6 @@ void sapphiredb::raft::Node::init(Config& conf){
             if(this->raft->tryPushRecvbuf(this->kque->popData())){
                 this->tsend_condition.notify_one();
             }
-            //this->tsend_condition.notify_one();
         }
     });
 
@@ -115,19 +114,25 @@ void sapphiredb::raft::Node::init(Config& conf){
         while(1){
             ::std::unique_lock<std::mutex> lock(this->tsend_mutex);
             this->tsend_condition.wait(lock, [this]{ return !this->raft->isSendEmpty(); });
-            //if(this->raft->isSendEmpty()) continue;
-            ::std::string msg = this->raft->tryPopSendbuf();
+
+            sapphiredb::raft::Sendstruct tsendstruct = this->raft->tryPopSendbuf();
+            ::std::string msg = tsendstruct.msg;
+            uint64_t to = tsendstruct.to;
+            
             if(!msg.empty()){
-                this->kque->funcPeerfd([this, &msg](::std::unordered_map<uint64_t, int32_t> peersfd){
-                    for(::std::unordered_map<uint64_t, int32_t>::iterator it = peersfd.begin(); it != peersfd.end(); ++it){
+                this->kque->funcPeerfd([this, &msg, &to](::std::unordered_map<uint64_t, int32_t> peersfd){
+                    if(to == 0){
+                        for(::std::unordered_map<uint64_t, int32_t>::iterator it = peersfd.begin(); it != peersfd.end(); ++it){
+                            while(!this->kque->pushData(msg));
+                            this->kque->send((*it).first);
+                        }
+                    }
+                    else{
                         while(!this->kque->pushData(msg));
-                        this->kque->send((*it).first);
+                        this->kque->send(to);
                     }
                 });
             }
-
-            lock.unlock();
-            this->tsend_condition.notify_one();
         }
     });
 }
@@ -174,18 +179,24 @@ void sapphiredb::raft::Node::init(Config&& conf){
             ::std::unique_lock<std::mutex> lock(this->tsend_mutex);
             this->tsend_condition.wait(lock, [this]{ return !this->raft->isSendEmpty(); });
 
-            ::std::string msg = this->raft->tryPopSendbuf();
+            sapphiredb::raft::Sendstruct tsendstruct = this->raft->tryPopSendbuf();
+            ::std::string msg = tsendstruct.msg;
+            uint64_t to = tsendstruct.to;
+            
             if(!msg.empty()){
-                this->kque->funcPeerfd([this, &msg](::std::unordered_map<uint64_t, int32_t> peersfd){
-                    for(::std::unordered_map<uint64_t, int32_t>::iterator it = peersfd.begin(); it != peersfd.end(); ++it){
+                this->kque->funcPeerfd([this, &msg, &to](::std::unordered_map<uint64_t, int32_t> peersfd){
+                    if(to == 0){
+                        for(::std::unordered_map<uint64_t, int32_t>::iterator it = peersfd.begin(); it != peersfd.end(); ++it){
+                            while(!this->kque->pushData(msg));
+                            this->kque->send((*it).first);
+                        }
+                    }
+                    else{
                         while(!this->kque->pushData(msg));
-                        this->kque->send((*it).first);
+                        this->kque->send(to);
                     }
                 });
             }
-
-            lock.unlock();
-            this->tsend_condition.notify_one();
         }
     });
 }
@@ -227,3 +238,6 @@ void sapphiredb::raft::Node::run(){
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
+
+
+//TODO mutli send heartbeat to peer about progress struct

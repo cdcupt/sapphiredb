@@ -491,10 +491,8 @@ void sapphiredb::raft::Raft::send(raftpb::Message msg){
         //TODO MsgProp MsgReadIndex
     }
 
-    if(msg.type() == 12) logger->warn("send msg {:s} to node {:d}", name(msg.type()), msg.to());
     this->_sendmsgs.push(msg);
     node_send_condition->notify_all();
-    //if(!this->_sendmsgs.empty()) if(msg.type() == 1) ::std::cout << "fuckkkkkkkkkk" << ::std::endl;
 }
 
 void sapphiredb::raft::Raft::sendHeartbeat(uint64_t to, std::string ctx){
@@ -538,6 +536,16 @@ void sapphiredb::raft::Raft::bcastHeartbeat(){
     if(!this->_prs.empty()){
         this->forEachProgress(this->_prs, fun);
     }
+}
+
+void sapphiredb::raft::Raft::bcastHeartbeat_fast(){
+    raftpb::Message msg;
+    msg.set_from(this->_id);
+    msg.set_to(0);
+    msg.set_type(raftpb::MsgHeartbeat);
+    msg.set_context("");
+
+    this->send(msg);
 }
 
 //message box approach sendAppend
@@ -767,16 +775,16 @@ raftpb::Message sapphiredb::raft::Raft::deserializeData(::std::string data){
     return msg;
 }
 
-::std::string sapphiredb::raft::Raft::tryPopSendbuf(){
+sapphiredb::raft::Sendstruct sapphiredb::raft::Raft::tryPopSendbuf(){
     ::std::unique_lock<::std::mutex> lock(this->sendbuf_mutex);
     if(!this->_sendmsgs.empty()){
         raftpb::Message msg = std::move(this->_sendmsgs.front());
         ::std::cout << "_sendmsgs: " << name(msg.type()) << ::std::endl;
         this->_sendmsgs.pop();
-        return serializeData(msg);
+        return sapphiredb::raft::Sendstruct(serializeData(msg), msg.to());
     }
 
-    return "";
+    return sapphiredb::raft::Sendstruct("", 0);
 }
 
 bool sapphiredb::raft::Raft::tryPushRecvbuf(::std::string data){
