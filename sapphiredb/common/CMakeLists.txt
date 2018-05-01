@@ -13,7 +13,11 @@ include_directories(${PROJECT_SOURCE_DIR}/..)
 
 add_subdirectory(spdlog)
 
-add_library(common ${DIR_SRCS})
+IF (LINUX)
+    add_library(common epoll.cc net.cc timer.cc uniqueid.cc)
+ELSEIF (UNIX)
+    add_library(common kqueue.cc net.cc timer.cc uniqueid.cc)
+ENDIF ()
 
 target_link_libraries(common spdlog)
 target_link_libraries(common -pthread)
