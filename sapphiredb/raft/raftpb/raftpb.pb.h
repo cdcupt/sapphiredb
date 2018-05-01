@@ -37,7 +37,7 @@ namespace protobuf_raftpb_2eproto {
 struct TableStruct {
   static const ::google::protobuf::internal::ParseTableField entries[];
   static const ::google::protobuf::internal::AuxillaryParseTableField aux[];
-  static const ::google::protobuf::internal::ParseTable schema[5];
+  static const ::google::protobuf::internal::ParseTable schema[7];
   static const ::google::protobuf::internal::FieldMetadata field_metadata[];
   static const ::google::protobuf::internal::SerializationTable serialization_table[];
   static const ::google::protobuf::uint32 offsets[];
@@ -51,6 +51,10 @@ void InitDefaultsSnapshotMetadataImpl();
 void InitDefaultsSnapshotMetadata();
 void InitDefaultsSnapshotImpl();
 void InitDefaultsSnapshot();
+void InitDefaultsHardStateImpl();
+void InitDefaultsHardState();
+void InitDefaultsStorageImpl();
+void InitDefaultsStorage();
 void InitDefaultsMessageImpl();
 void InitDefaultsMessage();
 inline void InitDefaults() {
@@ -58,6 +62,8 @@ inline void InitDefaults() {
   InitDefaultsEntry();
   InitDefaultsSnapshotMetadata();
   InitDefaultsSnapshot();
+  InitDefaultsHardState();
+  InitDefaultsStorage();
   InitDefaultsMessage();
 }
 }  // namespace protobuf_raftpb_2eproto
@@ -68,6 +74,9 @@ extern ConfStateDefaultTypeInternal _ConfState_default_instance_;
 class Entry;
 class EntryDefaultTypeInternal;
 extern EntryDefaultTypeInternal _Entry_default_instance_;
+class HardState;
+class HardStateDefaultTypeInternal;
+extern HardStateDefaultTypeInternal _HardState_default_instance_;
 class Message;
 class MessageDefaultTypeInternal;
 extern MessageDefaultTypeInternal _Message_default_instance_;
@@ -77,6 +86,9 @@ extern SnapshotDefaultTypeInternal _Snapshot_default_instance_;
 class SnapshotMetadata;
 class SnapshotMetadataDefaultTypeInternal;
 extern SnapshotMetadataDefaultTypeInternal _SnapshotMetadata_default_instance_;
+class Storage;
+class StorageDefaultTypeInternal;
+extern StorageDefaultTypeInternal _Storage_default_instance_;
 }  // namespace raftpb
 namespace raftpb {
 
@@ -619,6 +631,251 @@ class Snapshot : public ::google::protobuf::Message /* @@protoc_insertion_point(
 };
 // -------------------------------------------------------------------
 
+class HardState : public ::google::protobuf::Message /* @@protoc_insertion_point(class_definition:raftpb.HardState) */ {
+ public:
+  HardState();
+  virtual ~HardState();
+
+  HardState(const HardState& from);
+
+  inline HardState& operator=(const HardState& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  #if LANG_CXX11
+  HardState(HardState&& from) noexcept
+    : HardState() {
+    *this = ::std::move(from);
+  }
+
+  inline HardState& operator=(HardState&& from) noexcept {
+    if (GetArenaNoVirtual() == from.GetArenaNoVirtual()) {
+      if (this != &from) InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+  #endif
+  static const ::google::protobuf::Descriptor* descriptor();
+  static const HardState& default_instance();
+
+  static void InitAsDefaultInstance();  // FOR INTERNAL USE ONLY
+  static inline const HardState* internal_default_instance() {
+    return reinterpret_cast<const HardState*>(
+               &_HardState_default_instance_);
+  }
+  static PROTOBUF_CONSTEXPR int const kIndexInFileMessages =
+    4;
+
+  void Swap(HardState* other);
+  friend void swap(HardState& a, HardState& b) {
+    a.Swap(&b);
+  }
+
+  // implements Message ----------------------------------------------
+
+  inline HardState* New() const PROTOBUF_FINAL { return New(NULL); }
+
+  HardState* New(::google::protobuf::Arena* arena) const PROTOBUF_FINAL;
+  void CopyFrom(const ::google::protobuf::Message& from) PROTOBUF_FINAL;
+  void MergeFrom(const ::google::protobuf::Message& from) PROTOBUF_FINAL;
+  void CopyFrom(const HardState& from);
+  void MergeFrom(const HardState& from);
+  void Clear() PROTOBUF_FINAL;
+  bool IsInitialized() const PROTOBUF_FINAL;
+
+  size_t ByteSizeLong() const PROTOBUF_FINAL;
+  bool MergePartialFromCodedStream(
+      ::google::protobuf::io::CodedInputStream* input) PROTOBUF_FINAL;
+  void SerializeWithCachedSizes(
+      ::google::protobuf::io::CodedOutputStream* output) const PROTOBUF_FINAL;
+  ::google::protobuf::uint8* InternalSerializeWithCachedSizesToArray(
+      bool deterministic, ::google::protobuf::uint8* target) const PROTOBUF_FINAL;
+  int GetCachedSize() const PROTOBUF_FINAL { return _cached_size_; }
+  private:
+  void SharedCtor();
+  void SharedDtor();
+  void SetCachedSize(int size) const PROTOBUF_FINAL;
+  void InternalSwap(HardState* other);
+  private:
+  inline ::google::protobuf::Arena* GetArenaNoVirtual() const {
+    return NULL;
+  }
+  inline void* MaybeArenaPtr() const {
+    return NULL;
+  }
+  public:
+
+  ::google::protobuf::Metadata GetMetadata() const PROTOBUF_FINAL;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  // uint64 term = 1;
+  void clear_term();
+  static const int kTermFieldNumber = 1;
+  ::google::protobuf::uint64 term() const;
+  void set_term(::google::protobuf::uint64 value);
+
+  // uint64 vote = 2;
+  void clear_vote();
+  static const int kVoteFieldNumber = 2;
+  ::google::protobuf::uint64 vote() const;
+  void set_vote(::google::protobuf::uint64 value);
+
+  // uint64 commit = 3;
+  void clear_commit();
+  static const int kCommitFieldNumber = 3;
+  ::google::protobuf::uint64 commit() const;
+  void set_commit(::google::protobuf::uint64 value);
+
+  // @@protoc_insertion_point(class_scope:raftpb.HardState)
+ private:
+
+  ::google::protobuf::internal::InternalMetadataWithArena _internal_metadata_;
+  ::google::protobuf::uint64 term_;
+  ::google::protobuf::uint64 vote_;
+  ::google::protobuf::uint64 commit_;
+  mutable int _cached_size_;
+  friend struct ::protobuf_raftpb_2eproto::TableStruct;
+  friend void ::protobuf_raftpb_2eproto::InitDefaultsHardStateImpl();
+};
+// -------------------------------------------------------------------
+
+class Storage : public ::google::protobuf::Message /* @@protoc_insertion_point(class_definition:raftpb.Storage) */ {
+ public:
+  Storage();
+  virtual ~Storage();
+
+  Storage(const Storage& from);
+
+  inline Storage& operator=(const Storage& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  #if LANG_CXX11
+  Storage(Storage&& from) noexcept
+    : Storage() {
+    *this = ::std::move(from);
+  }
+
+  inline Storage& operator=(Storage&& from) noexcept {
+    if (GetArenaNoVirtual() == from.GetArenaNoVirtual()) {
+      if (this != &from) InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+  #endif
+  static const ::google::protobuf::Descriptor* descriptor();
+  static const Storage& default_instance();
+
+  static void InitAsDefaultInstance();  // FOR INTERNAL USE ONLY
+  static inline const Storage* internal_default_instance() {
+    return reinterpret_cast<const Storage*>(
+               &_Storage_default_instance_);
+  }
+  static PROTOBUF_CONSTEXPR int const kIndexInFileMessages =
+    5;
+
+  void Swap(Storage* other);
+  friend void swap(Storage& a, Storage& b) {
+    a.Swap(&b);
+  }
+
+  // implements Message ----------------------------------------------
+
+  inline Storage* New() const PROTOBUF_FINAL { return New(NULL); }
+
+  Storage* New(::google::protobuf::Arena* arena) const PROTOBUF_FINAL;
+  void CopyFrom(const ::google::protobuf::Message& from) PROTOBUF_FINAL;
+  void MergeFrom(const ::google::protobuf::Message& from) PROTOBUF_FINAL;
+  void CopyFrom(const Storage& from);
+  void MergeFrom(const Storage& from);
+  void Clear() PROTOBUF_FINAL;
+  bool IsInitialized() const PROTOBUF_FINAL;
+
+  size_t ByteSizeLong() const PROTOBUF_FINAL;
+  bool MergePartialFromCodedStream(
+      ::google::protobuf::io::CodedInputStream* input) PROTOBUF_FINAL;
+  void SerializeWithCachedSizes(
+      ::google::protobuf::io::CodedOutputStream* output) const PROTOBUF_FINAL;
+  ::google::protobuf::uint8* InternalSerializeWithCachedSizesToArray(
+      bool deterministic, ::google::protobuf::uint8* target) const PROTOBUF_FINAL;
+  int GetCachedSize() const PROTOBUF_FINAL { return _cached_size_; }
+  private:
+  void SharedCtor();
+  void SharedDtor();
+  void SetCachedSize(int size) const PROTOBUF_FINAL;
+  void InternalSwap(Storage* other);
+  private:
+  inline ::google::protobuf::Arena* GetArenaNoVirtual() const {
+    return NULL;
+  }
+  inline void* MaybeArenaPtr() const {
+    return NULL;
+  }
+  public:
+
+  ::google::protobuf::Metadata GetMetadata() const PROTOBUF_FINAL;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  // repeated .raftpb.Entry entries = 3;
+  int entries_size() const;
+  void clear_entries();
+  static const int kEntriesFieldNumber = 3;
+  const ::raftpb::Entry& entries(int index) const;
+  ::raftpb::Entry* mutable_entries(int index);
+  ::raftpb::Entry* add_entries();
+  ::google::protobuf::RepeatedPtrField< ::raftpb::Entry >*
+      mutable_entries();
+  const ::google::protobuf::RepeatedPtrField< ::raftpb::Entry >&
+      entries() const;
+
+  // .raftpb.Snapshot snap = 2;
+  bool has_snap() const;
+  void clear_snap();
+  static const int kSnapFieldNumber = 2;
+  const ::raftpb::Snapshot& snap() const;
+  ::raftpb::Snapshot* release_snap();
+  ::raftpb::Snapshot* mutable_snap();
+  void set_allocated_snap(::raftpb::Snapshot* snap);
+
+  // .raftpb.HardState hardstate = 4;
+  bool has_hardstate() const;
+  void clear_hardstate();
+  static const int kHardstateFieldNumber = 4;
+  const ::raftpb::HardState& hardstate() const;
+  ::raftpb::HardState* release_hardstate();
+  ::raftpb::HardState* mutable_hardstate();
+  void set_allocated_hardstate(::raftpb::HardState* hardstate);
+
+  // uint64 offset = 1;
+  void clear_offset();
+  static const int kOffsetFieldNumber = 1;
+  ::google::protobuf::uint64 offset() const;
+  void set_offset(::google::protobuf::uint64 value);
+
+  // @@protoc_insertion_point(class_scope:raftpb.Storage)
+ private:
+
+  ::google::protobuf::internal::InternalMetadataWithArena _internal_metadata_;
+  ::google::protobuf::RepeatedPtrField< ::raftpb::Entry > entries_;
+  ::raftpb::Snapshot* snap_;
+  ::raftpb::HardState* hardstate_;
+  ::google::protobuf::uint64 offset_;
+  mutable int _cached_size_;
+  friend struct ::protobuf_raftpb_2eproto::TableStruct;
+  friend void ::protobuf_raftpb_2eproto::InitDefaultsStorageImpl();
+};
+// -------------------------------------------------------------------
+
 class Message : public ::google::protobuf::Message /* @@protoc_insertion_point(class_definition:raftpb.Message) */ {
  public:
   Message();
@@ -654,7 +911,7 @@ class Message : public ::google::protobuf::Message /* @@protoc_insertion_point(c
                &_Message_default_instance_);
   }
   static PROTOBUF_CONSTEXPR int const kIndexInFileMessages =
-    4;
+    6;
 
   void Swap(Message* other);
   friend void swap(Message& a, Message& b) {
@@ -1171,6 +1428,200 @@ inline void Snapshot::set_allocated_metadata(::raftpb::SnapshotMetadata* metadat
 
 // -------------------------------------------------------------------
 
+// HardState
+
+// uint64 term = 1;
+inline void HardState::clear_term() {
+  term_ = GOOGLE_ULONGLONG(0);
+}
+inline ::google::protobuf::uint64 HardState::term() const {
+  // @@protoc_insertion_point(field_get:raftpb.HardState.term)
+  return term_;
+}
+inline void HardState::set_term(::google::protobuf::uint64 value) {
+  
+  term_ = value;
+  // @@protoc_insertion_point(field_set:raftpb.HardState.term)
+}
+
+// uint64 vote = 2;
+inline void HardState::clear_vote() {
+  vote_ = GOOGLE_ULONGLONG(0);
+}
+inline ::google::protobuf::uint64 HardState::vote() const {
+  // @@protoc_insertion_point(field_get:raftpb.HardState.vote)
+  return vote_;
+}
+inline void HardState::set_vote(::google::protobuf::uint64 value) {
+  
+  vote_ = value;
+  // @@protoc_insertion_point(field_set:raftpb.HardState.vote)
+}
+
+// uint64 commit = 3;
+inline void HardState::clear_commit() {
+  commit_ = GOOGLE_ULONGLONG(0);
+}
+inline ::google::protobuf::uint64 HardState::commit() const {
+  // @@protoc_insertion_point(field_get:raftpb.HardState.commit)
+  return commit_;
+}
+inline void HardState::set_commit(::google::protobuf::uint64 value) {
+  
+  commit_ = value;
+  // @@protoc_insertion_point(field_set:raftpb.HardState.commit)
+}
+
+// -------------------------------------------------------------------
+
+// Storage
+
+// uint64 offset = 1;
+inline void Storage::clear_offset() {
+  offset_ = GOOGLE_ULONGLONG(0);
+}
+inline ::google::protobuf::uint64 Storage::offset() const {
+  // @@protoc_insertion_point(field_get:raftpb.Storage.offset)
+  return offset_;
+}
+inline void Storage::set_offset(::google::protobuf::uint64 value) {
+  
+  offset_ = value;
+  // @@protoc_insertion_point(field_set:raftpb.Storage.offset)
+}
+
+// .raftpb.Snapshot snap = 2;
+inline bool Storage::has_snap() const {
+  return this != internal_default_instance() && snap_ != NULL;
+}
+inline void Storage::clear_snap() {
+  if (GetArenaNoVirtual() == NULL && snap_ != NULL) {
+    delete snap_;
+  }
+  snap_ = NULL;
+}
+inline const ::raftpb::Snapshot& Storage::snap() const {
+  const ::raftpb::Snapshot* p = snap_;
+  // @@protoc_insertion_point(field_get:raftpb.Storage.snap)
+  return p != NULL ? *p : *reinterpret_cast<const ::raftpb::Snapshot*>(
+      &::raftpb::_Snapshot_default_instance_);
+}
+inline ::raftpb::Snapshot* Storage::release_snap() {
+  // @@protoc_insertion_point(field_release:raftpb.Storage.snap)
+  
+  ::raftpb::Snapshot* temp = snap_;
+  snap_ = NULL;
+  return temp;
+}
+inline ::raftpb::Snapshot* Storage::mutable_snap() {
+  
+  if (snap_ == NULL) {
+    snap_ = new ::raftpb::Snapshot;
+  }
+  // @@protoc_insertion_point(field_mutable:raftpb.Storage.snap)
+  return snap_;
+}
+inline void Storage::set_allocated_snap(::raftpb::Snapshot* snap) {
+  ::google::protobuf::Arena* message_arena = GetArenaNoVirtual();
+  if (message_arena == NULL) {
+    delete snap_;
+  }
+  if (snap) {
+    ::google::protobuf::Arena* submessage_arena = NULL;
+    if (message_arena != submessage_arena) {
+      snap = ::google::protobuf::internal::GetOwnedMessage(
+          message_arena, snap, submessage_arena);
+    }
+    
+  } else {
+    
+  }
+  snap_ = snap;
+  // @@protoc_insertion_point(field_set_allocated:raftpb.Storage.snap)
+}
+
+// repeated .raftpb.Entry entries = 3;
+inline int Storage::entries_size() const {
+  return entries_.size();
+}
+inline void Storage::clear_entries() {
+  entries_.Clear();
+}
+inline const ::raftpb::Entry& Storage::entries(int index) const {
+  // @@protoc_insertion_point(field_get:raftpb.Storage.entries)
+  return entries_.Get(index);
+}
+inline ::raftpb::Entry* Storage::mutable_entries(int index) {
+  // @@protoc_insertion_point(field_mutable:raftpb.Storage.entries)
+  return entries_.Mutable(index);
+}
+inline ::raftpb::Entry* Storage::add_entries() {
+  // @@protoc_insertion_point(field_add:raftpb.Storage.entries)
+  return entries_.Add();
+}
+inline ::google::protobuf::RepeatedPtrField< ::raftpb::Entry >*
+Storage::mutable_entries() {
+  // @@protoc_insertion_point(field_mutable_list:raftpb.Storage.entries)
+  return &entries_;
+}
+inline const ::google::protobuf::RepeatedPtrField< ::raftpb::Entry >&
+Storage::entries() const {
+  // @@protoc_insertion_point(field_list:raftpb.Storage.entries)
+  return entries_;
+}
+
+// .raftpb.HardState hardstate = 4;
+inline bool Storage::has_hardstate() const {
+  return this != internal_default_instance() && hardstate_ != NULL;
+}
+inline void Storage::clear_hardstate() {
+  if (GetArenaNoVirtual() == NULL && hardstate_ != NULL) {
+    delete hardstate_;
+  }
+  hardstate_ = NULL;
+}
+inline const ::raftpb::HardState& Storage::hardstate() const {
+  const ::raftpb::HardState* p = hardstate_;
+  // @@protoc_insertion_point(field_get:raftpb.Storage.hardstate)
+  return p != NULL ? *p : *reinterpret_cast<const ::raftpb::HardState*>(
+      &::raftpb::_HardState_default_instance_);
+}
+inline ::raftpb::HardState* Storage::release_hardstate() {
+  // @@protoc_insertion_point(field_release:raftpb.Storage.hardstate)
+  
+  ::raftpb::HardState* temp = hardstate_;
+  hardstate_ = NULL;
+  return temp;
+}
+inline ::raftpb::HardState* Storage::mutable_hardstate() {
+  
+  if (hardstate_ == NULL) {
+    hardstate_ = new ::raftpb::HardState;
+  }
+  // @@protoc_insertion_point(field_mutable:raftpb.Storage.hardstate)
+  return hardstate_;
+}
+inline void Storage::set_allocated_hardstate(::raftpb::HardState* hardstate) {
+  ::google::protobuf::Arena* message_arena = GetArenaNoVirtual();
+  if (message_arena == NULL) {
+    delete hardstate_;
+  }
+  if (hardstate) {
+    ::google::protobuf::Arena* submessage_arena = NULL;
+    if (message_arena != submessage_arena) {
+      hardstate = ::google::protobuf::internal::GetOwnedMessage(
+          message_arena, hardstate, submessage_arena);
+    }
+    
+  } else {
+    
+  }
+  hardstate_ = hardstate;
+  // @@protoc_insertion_point(field_set_allocated:raftpb.Storage.hardstate)
+}
+
+// -------------------------------------------------------------------
+
 // Message
 
 // .raftpb.MessageType type = 1;
@@ -1435,6 +1886,10 @@ inline void Message::set_allocated_context(::std::string* context) {
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------

@@ -16,7 +16,14 @@
 #include "common/thread_pool.h"
 #include "common/uniqueid.h"
 #include "common/net.h"
-#include "common/kqueue.h"
+
+#include "include/config.h"
+
+#ifdef UNIX_LIKE
+    #include "common/kqueue.h"
+#else
+    #include "common/epoll.h"
+#endif
 
 #define LONG_CXX11
 
@@ -49,7 +56,11 @@ private:
     Raft* raft;
     common::Uniqueid* uid;
     ::std::shared_ptr<spdlog::logger> logger;
+#ifdef UNIX_LIKE
     sapphiredb::common::Kqueue* kque;
+#else
+    sapphiredb::common::Epoll* kque;
+#endif
 
     //send thread mutex and condition
     ::std::mutex tsend_mutex;
@@ -66,6 +77,10 @@ private:
     //receive thread mutex and condition
     ::std::mutex tstep_mutex;
     ::std::condition_variable tstep_condition;
+
+    //persist data to stable storage
+    ::std::mutex tpersist_mutex;
+    ::std::condition_variable tpersist_condition;
 
     void init(Config& conf);
     void init(Config&& conf);

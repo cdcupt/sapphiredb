@@ -9,9 +9,9 @@ include_directories(../common ../raft)
 
 include_directories(${PROJECT_SOURCE_DIR}/..)
 
-SET(CMAKE_BUILD_TYPE "Debug")  
-SET(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g2 -ggdb")  
-SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall") 
+#SET(CMAKE_BUILD_TYPE "Debug")  
+#SET(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g2 -ggdb")  
+#SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall") 
 
 file( GLOB APP_SOURCES ${PROJECT_SOURCE_DIR}/*.cc )
 foreach( testsourcefile ${APP_SOURCES} )

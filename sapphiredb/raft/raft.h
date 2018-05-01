@@ -21,6 +21,7 @@
 #include "raft/progress.h"
 #include "raft/raftpb/raftpb.pb.h"
 #include "common/spdlog/include/spdlog/spdlog.h"
+#include "raft/storage.h"
 
 #define LONG_CXX11
 
@@ -100,14 +101,40 @@ public:
     uint64_t _id;
     bool isLeader;
     std::shared_ptr<spdlog::logger> logger;
-    ::std::vector<raftpb::Entry> _entries;
     //prs represents all follower's progress in the view of the leader.
     ::std::unordered_map<uint64_t, Progress> _prs;
     ::std::unordered_map<uint64_t, int32_t> _votes;
 
+    //about raftlog
     //constant change on all server
     uint64_t _commitIndex;
     uint64_t _lastApplied;
+    //try to modify constant data
+    uint64_t maybeAppend(const uint64_t& index, const uint64_t& logTerm, const uint64_t& committed, const ::std::vector<raftpb::Entry>& ents);
+    uint64_t append(::std::vector<raftpb::Entry> ents);
+    bool maybeCommit();
+    void restore(raftpb::Snapshot snap);
+    raftpb::Snapshot snapshot();
+    uint64_t firstIndex();
+    uint64_t lastIndex();
+    void commitTo(uint64_t commit);
+    void appliedTo(uint64_t index);
+    uint64_t lastTerm();
+    uint64_t term(uint64_t index);
+
+    //unstable storage
+    ::std::vector<raftpb::Entry> _entries;
+    raftpb::Snapshot* _snap;
+    uint64_t _offset;
+    uint64_t maybeFirstIndex();
+    uint64_t maybeLastIndex();
+    uint64_t maybeTerm(uint64_t index);
+    void stableTo(uint64_t index, uint64_t term);
+    void stableSnapTo(uint64_t index);
+    void truncateAndAppend(::std::vector<raftpb::Entry>& ents);
+
+    //storage
+    Storage* _storage;
 
     //other memeber
     uint64_t _leader;
@@ -148,6 +175,7 @@ public:
     ::std::condition_variable* node_recv_condition;
     ::std::condition_variable* node_bind_condition;
     ::std::condition_variable* node_step_condition;
+    ::std::condition_variable* node_persist_condition;
 
     uint32_t rand(uint32_t min, uint32_t max, uint32_t seed = 0);
     void resetRandomizedElectionTimeout();
@@ -156,23 +184,21 @@ public:
     void sendHeartbeat(uint64_t to, std::string ctx);
     void forEachProgress(::std::unordered_map<uint64_t, Progress> prs,
             std::function<void(sapphiredb::raft::Raft*, uint64_t, Progress&)> func);
-    void commitTo(uint64_t commit);
     void send(raftpb::Message msg);
     int32_t grantMe(uint64_t id, raftpb::MessageType t, bool v);
     bool pastElectionTimeout();
     bool checkQuorumActive();
     void generalStep(raftpb::Message msg);
-
-    //try to modify constant data
-    uint64_t tryAppend(const uint64_t& index, const uint64_t& logTerm, const uint64_t& committed, const ::std::vector<raftpb::Entry>& ents);
+    void appendEntry(::std::vector<raftpb::Entry> ents);
+    bool propose(::std::string op);
 
     ::std::string serializeData(raftpb::Message msg);
     raftpb::Message deserializeData(::std::string data);
 
 public:
     Raft(uint64_t id, ::std::condition_variable* tsend_condition = nullptr, ::std::condition_variable* trecv_condition = nullptr,
-        ::std::condition_variable* tbind_condition = nullptr, ::std::condition_variable* tstep_condition = nullptr,
-        ::std::string path = "./raft_log", uint32_t heartbeatTimeout = 10, uint32_t electionTimeout = 150);
+        ::std::condition_variable* tbind_condition = nullptr, ::std::condition_variable* tstep_condition = nullptr, ::std::condition_variable* tpersist_condition = nullptr,
+        ::std::string path = "./raft_log", uint32_t heartbeatTimeout = 10, uint32_t electionTimeout = 150, ::std::string storage_path = "./storage.st");
     ~Raft();
 
     friend void stepLeader(sapphiredb::raft::Raft* r, raftpb::Message msg);
@@ -220,9 +246,9 @@ public:
     int32_t popUnknownid();
     bool emptyUnknownid();
 
-    bool maybeCommit();
-    void appendEntry(::std::vector<raftpb::Entry> ents);
-    bool propose(::std::string op);
+    void storageLog();
+
+    bool Ready;
 
     inline ::std::string name(raftpb::MessageType e){
         switch(e){

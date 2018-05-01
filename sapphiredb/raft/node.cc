@@ -19,17 +19,21 @@ sapphiredb::raft::Config::~Config(){
 
 sapphiredb::raft::Node::Node(Config& conf, ::std::string log){
     try{
+    #ifdef UNIX_LIKE
         this->kque = new sapphiredb::common::Kqueue(conf.socket.first, conf.socket.second, sapphiredb::common::Netcon::IPV4, 1024, 1024, 100, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition));
+    #else
+        this->kque = new sapphiredb::common::Epoll(conf.socket.first, conf.socket.second, sapphiredb::common::Netcon::IPV4, 1024, 1024, 100, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition));
+    #endif
         this->logger = spdlog::stdout_color_mt("node_console");
         //this->logger = spdlog::basic_logger_mt("logger", "raft_log");
         //uid = &common::Uniqueid::Instance();
         if(conf.timeout == nullptr && conf.raftlog.empty()){
-            if(conf.id != 0) this->raft = new Raft(conf.id, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition));
+            if(conf.id != 0) this->raft = new Raft(conf.id, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition), &(this->tpersist_condition));
             //else this->raft = new Raft(common::Uniqueid::Instance().getUniqueid());
             this->init(conf);
         }
         else{
-            if(conf.id != 0) this->raft = new Raft(conf.id, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition), conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->electionTimeout);
+            if(conf.id != 0) this->raft = new Raft(conf.id, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition), &(this->tpersist_condition), conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->electionTimeout);
             //else this->raft = new Raft(common::Uniqueid::Instance().getUniqueid(), conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->heartbeatTimeout);
             this->init(conf);
         }
@@ -41,17 +45,21 @@ sapphiredb::raft::Node::Node(Config& conf, ::std::string log){
 
 sapphiredb::raft::Node::Node(Config&& conf, ::std::string log){
     try{
+    #ifdef UNIX_LIKE
         this->kque = new sapphiredb::common::Kqueue(conf.socket.first, conf.socket.second, sapphiredb::common::Netcon::IPV4, 1024, 1024, 100, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition));
+    #else
+        this->kque = new sapphiredb::common::Epoll(conf.socket.first, conf.socket.second, sapphiredb::common::Netcon::IPV4, 1024, 1024, 100, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition));
+    #endif
         this->logger = spdlog::stdout_color_mt("node_console");
         //this->logger = spdlog::basic_logger_mt("logger", "raft_log");
         //uid = &common::Uniqueid::Instance();
         if(conf.timeout == nullptr && conf.raftlog.empty()){
-            /*if(conf.id != 0)*/ this->raft = new Raft(conf.id, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition));
+            /*if(conf.id != 0)*/ this->raft = new Raft(conf.id, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition), &(this->tpersist_condition));
             //else this->raft = new Raft(common::Uniqueid::Instance().getUniqueid());
             this->init(conf);
         }
         else{
-            /*if(conf.id != 0)*/ this->raft = new Raft(conf.id, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition), conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->electionTimeout);
+            /*if(conf.id != 0)*/ this->raft = new Raft(conf.id, &(this->tsend_condition), &(this->trecv_condition), &(this->tbind_condition), &(this->tstep_condition), &(this->tpersist_condition), conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->electionTimeout);
             //else this->raft = new Raft(common::Uniqueid::Instance().getUniqueid(), conf.raftlog, (conf.timeout)->heartbeatTimeout, (conf.timeout)->heartbeatTimeout);
             this->init(conf);
         }
@@ -65,6 +73,7 @@ sapphiredb::raft::Node::~Node(){
     try{
         raft->stop();//nothing to do
         delete uid;
+        delete kque;
         delete raft;
     }
     catch(...){
@@ -133,6 +142,9 @@ void sapphiredb::raft::Node::init(Config& conf){
                     }
                 });
             }
+
+            lock.unlock();
+            this->tsend_condition.notify_all();
         }
     });
 }
@@ -197,6 +209,9 @@ void sapphiredb::raft::Node::init(Config&& conf){
                     }
                 });
             }
+
+            lock.unlock();
+            this->tsend_condition.notify_all();
         }
     });
 }
@@ -226,13 +241,19 @@ void sapphiredb::raft::Node::run(){
             this->raft->stepNode();
         }
     });
-    /*
-    kv.enqueue([this]() {
-            while(1){
-                //TODO send append log msg
-            }
-        });
-    */
+    
+    static sapphiredb::common::ThreadPool persist(1);
+    persist.enqueue([this]() {
+        while(1){
+            ::std::unique_lock<std::mutex> lock(this->tpersist_mutex);
+            this->tpersist_condition.wait(lock, [this]{ return this->raft->Ready; });
+
+            ::std::cout << "this->raft->storageLog();" << ::std::endl;
+            this->raft->storageLog();
+            this->raft->Ready = false;
+        }
+    });
+    
     for(;;){
         this->raft->tickNode(this->raft);
         std::this_thread::sleep_for(std::chrono::milliseconds(1));

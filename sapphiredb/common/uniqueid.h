@@ -4,6 +4,7 @@
 #include <iostream>
 #include <ctime>
 #include <random>
+#include <chrono>
 
 #define LONG_CXX11
 

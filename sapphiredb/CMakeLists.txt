@@ -7,6 +7,14 @@ aux_source_directory(${PROJECT_SOURCE_DIR} DIR_SRCS)
 
 include_directories(${PROJECT_SOURCE_DIR}/..)
 
+IF (APPLE)
+    option(UNIX_LIKE "UNIX_LIKE platform" ON)
+    configure_file (${PROJECT_SOURCE_DIR}/include/config_unix.h.in ${PROJECT_SOURCE_DIR}/include/config.h)
+ELSE ()
+    option(LINUX "LINUX platfrom" ON)
+    configure_file (${PROJECT_SOURCE_DIR}/include/config_linux.h.in ${PROJECT_SOURCE_DIR}/include/config.h)
+ENDIF ()
+
 add_subdirectory(raft raft)
 add_subdirectory(common common)
 add_subdirectory(test test)

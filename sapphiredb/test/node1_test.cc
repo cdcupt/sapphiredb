@@ -1,4 +1,3 @@
-#include "common/kqueue.h"
 #include "common/thread_pool.h"
 #include "raft/node.h"
 #include <unistd.h>

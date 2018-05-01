@@ -150,7 +150,7 @@ void sapphiredb::common::Kqueue::handleWrite(int32_t efd, int32_t fd) {
         }
         else{
             this->sendbuf->len -= r;
-            if(this->sendbuf->len == 0) break;
+            if(this->sendbuf->len <= 0) break;
         }
     }
     delete_event(efd, fd, KQUEUE_WRITE_EVENT);
@@ -207,6 +207,7 @@ void sapphiredb::common::Kqueue::send(uint64_t id){
             }
         }
         else{
+            //if(peersfd.find(id) == peersfd.end() || peersfd[id] == 0) return;
             updateEvents(this->epollfd, peersfd[id], KQUEUE_WRITE_EVENT, false);
         }
     }
@@ -219,6 +220,7 @@ void sapphiredb::common::Kqueue::recv(uint64_t id){
         }
     }
     else{
+        //if(peersfd.find(id) == peersfd.end() || peersfd[id] == 0) return;
         updateEvents(this->epollfd, peersfd[id], KQUEUE_READ_EVENT, false);
     }
 }
@@ -239,6 +241,11 @@ void sapphiredb::common::Kqueue::listenp(uint32_t listenq){
 
 void sapphiredb::common::Kqueue::bindPeerfd(uint64_t id, int32_t fd){
     if(peersfd.find(id) == peersfd.end()){
+        peersfd[id] = fd;
+    }
+    else{
+        //TODO something else
+        logger->warn("id[{:d}] restart!", id);
         peersfd[id] = fd;
     }
 }

@@ -45,6 +45,8 @@ bool sapphiredb::common::Netcon::pushData(::std::string&& data){
             return ::std::string(this->recvbuf->buf->begin(), this->recvbuf->buf->begin()+slen);
         }
     }
+
+    return "";
 }
 void sapphiredb::common::Netcon::clearSendbuf(){
     ::std::lock_guard<::std::mutex> lock(this->buf_mutex);

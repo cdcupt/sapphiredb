@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <signal.h> 
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -61,7 +62,7 @@ private:
     ::std::condition_variable* node_step_condition;
 
     void setNonBlock(int32_t fd);
-    void sapphiredb::common::Epoll::updateEvents(int32_t efd, int32_t fd, int32_t events, int32_t op);
+    void updateEvents(int32_t efd, int32_t fd, int32_t events, int32_t op);
     void connecttopeer(::std::string&& ip, uint32_t port, uint64_t id);
     void handleAccept(int32_t efd, int32_t fd);
     void handleRead(int32_t efd, int32_t fd);

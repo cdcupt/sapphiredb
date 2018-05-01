@@ -63,6 +63,7 @@ bool sapphiredb::raft::Progress::maybeUpdate(uint64_t n){
     if(this->_next < n+1){
         this->_next = n+1;
     }
+    ::std::cout << "*****************this->_match: " << this->_match << " n: " << n << ::std::endl;
     if(this->_match < n){
         this->_match = n;
         return true;

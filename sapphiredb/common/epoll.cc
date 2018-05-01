@@ -12,8 +12,8 @@ void sapphiredb::common::Epoll::updateEvents(int32_t efd, int32_t fd, int32_t ev
     memset(&ev, 0, sizeof(ev));
     ev.events = events;
     ev.data.fd = fd;
-    printf("%s fd %d events read %d write %d\n",
-           op==EPOLL_CTL_MOD?"mod":"add", fd, ev.events & EPOLLIN, ev.events & EPOLLOUT);
+    //printf("%s fd %d events read %d write %d\n",
+    //       op==EPOLL_CTL_MOD?"mod":"add", fd, ev.events & EPOLLIN, ev.events & EPOLLOUT);
     int32_t r = epoll_ctl(efd, op, fd, &ev);
     exit_if(r, "epoll_ctl failed");
 }
@@ -51,10 +51,10 @@ void sapphiredb::common::Epoll::handleAccept(int32_t efd, int32_t fd) {
     exit_if(r<0, "getpeername failed");
     logger->error("accept a connection from {:s} add got fd[{:d}]", inet_ntoa(raddr.sin_addr), cfd);
     pushUnknownfd(cfd);
+    this->node_bind_condition->notify_all();
     bcastfd.push_back(cfd);
     setNonBlock(cfd);
     updateEvents(efd, cfd, EPOLLIN|EPOLLET, EPOLL_CTL_ADD);
-    this->node_bind_condition->notify_all();
 }
 
 void sapphiredb::common::Epoll::handleRead(int32_t efd, int32_t fd) {
@@ -65,7 +65,7 @@ void sapphiredb::common::Epoll::handleRead(int32_t efd, int32_t fd) {
         while ((n=::read(fd, buf, sizeof(buf))) > 0) {
             ::std::lock_guard<::std::mutex> lock(this->buf_mutex);
             if(n+this->recvbuf->len > this->recvbuf->size){
-                updateEvents(efd, cfd, EPOLLIN, EPOLL_CTL_DEL);
+                //updateEvents(efd, fd, EPOLLIN, EPOLL_CTL_DEL);
                 logger->warn("buf is really fill when read fd[{:d}]", fd);
                 return;
             }
@@ -80,7 +80,7 @@ void sapphiredb::common::Epoll::handleRead(int32_t efd, int32_t fd) {
         }
         
         if(n == 0){
-            updateEvents(efd, cfd, EPOLLIN, EPOLL_CTL_DEL);
+            updateEvents(efd, fd, EPOLLIN, EPOLL_CTL_DEL);
             for(::std::unordered_map<uint64_t, int32_t>::iterator peer = peersfd.begin(); peer != peersfd.end(); ++peer){
                 if(peer->second == fd){
                     peersfd.erase(peer);
@@ -117,27 +117,27 @@ void sapphiredb::common::Epoll::handleWrite(int32_t efd, int32_t fd) {
             continue;
         }
         else if(r == 0){
-            updateEvents(efd, cfd, EPOLLOUT, EPOLL_CTL_DEL);
+            updateEvents(this->epollfd, fd, EPOLLIN|EPOLLET, EPOLL_CTL_MOD);
             logger->warn("fd[{:d}] socket closed!", fd);
             return;
         }
         else if(r < 0){
-            updateEvents(efd, cfd, EPOLLOUT, EPOLL_CTL_DEL);
+            updateEvents(this->epollfd, fd, EPOLLIN|EPOLLET, EPOLL_CTL_MOD);
             logger->error("Write fd[{:d}] write error", fd);
             return;
         }
         else{
             this->sendbuf->len -= r;
-            if(this->sendbuf->len == 0) break;
+            if(this->sendbuf->len <= 0) break;
         }
     }
-    updateEvents(efd, cfd, EPOLLOUT, EPOLL_CTL_DEL);
+    updateEvents(this->epollfd, fd, EPOLLIN|EPOLLET, EPOLL_CTL_MOD);
 }
 
 void sapphiredb::common::Epoll::handleConnect(int32_t efd, int32_t fd) {
     //::std::cout << "****handleConnect****" << ::std::endl;
     setNonBlock(fd);
-    updateEvents(efd, cfd, EPOLLIN|EPOLLET, EPOLL_CTL_ADD);
+    updateEvents(efd, fd, EPOLLIN|EPOLLET, EPOLL_CTL_ADD);
 }
 
 void sapphiredb::common::Epoll::doSomething(std::function<void(int32_t fd)> task){
@@ -178,11 +178,15 @@ void sapphiredb::common::Epoll::send(uint64_t id){
     if(this->sendbuf->len > 0){
         if(id == 0){
             for(auto ufd : bcastfd){
-                updateEvents(this->epollfd, ufd, EPOLLOUT, EPOLL_CTL_ADD);
+                updateEvents(this->epollfd, ufd, EPOLLIN|EPOLLOUT|EPOLLET, EPOLL_CTL_MOD);
             }
         }
         else{
-            updateEvents(this->epollfd, peersfd[id], EPOLLOUT, EPOLL_CTL_ADD);
+            if(peersfd.find(id) == peersfd.end() || peersfd[id] == 0){
+                this->sendbuf->len = 0;
+                return;
+            }
+            updateEvents(this->epollfd, peersfd[id], EPOLLIN|EPOLLOUT|EPOLLET, EPOLL_CTL_MOD);
         }
     }
 }
@@ -190,11 +194,12 @@ void sapphiredb::common::Epoll::send(uint64_t id){
 void sapphiredb::common::Epoll::recv(uint64_t id){
     if(id == 0){
         for(auto ufd : bcastfd){
-            updateEvents(this->epollfd, ufd, EPOLLIN, EPOLL_CTL_ADD);
+            updateEvents(this->epollfd, ufd, EPOLLIN|EPOLLET, EPOLL_CTL_ADD);
         }
     }
     else{
-        updateEvents(this->epollfd, peersfd[id], EPOLLIN, EPOLL_CTL_ADD);
+        //if(peersfd.find(id) == peersfd.end() || peersfd[id] == 0) return;
+        updateEvents(this->epollfd, peersfd[id], EPOLLIN|EPOLLET, EPOLL_CTL_ADD);
     }
 }
 
@@ -209,11 +214,16 @@ void sapphiredb::common::Epoll::loop_once(uint32_t waitms){
 void sapphiredb::common::Epoll::listenp(uint32_t listenq){
     listen(this->listenfd, listenq);
     this->setNonBlock(this->listenfd);
-    updateEvents(this->epollfd, this->listenfd, EPOLLIN, EPOLL_CTL_ADD);
+    updateEvents(this->epollfd, this->listenfd, EPOLLIN|EPOLLET, EPOLL_CTL_ADD);
 }
 
 void sapphiredb::common::Epoll::bindPeerfd(uint64_t id, int32_t fd){
     if(peersfd.find(id) == peersfd.end()){
+        peersfd[id] = fd;
+    }
+    else{
+        //TODO something else
+        logger->warn("id[{:d}] restart!", id);
         peersfd[id] = fd;
     }
 }

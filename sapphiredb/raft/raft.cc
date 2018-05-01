@@ -210,22 +210,47 @@ void sapphiredb::raft::stepLeader(sapphiredb::raft::Raft* r, raftpb::Message msg
         return;
     }
 
-    sapphiredb::raft::Progress pr = r->_prs[msg.from()];
     switch(msg.type()){
         case raftpb::MsgAppResp :
             {
-                pr.setRecentActive();
+                r->_prs[msg.from()].setRecentActive();
 
                 if(msg.reject()){
                     r->logger->warn("{:d} received msgApp rejection(lastindex: {:d}) from {:d} for index {:d}",
                             r->_id, msg.rejecthint(), msg.from(), msg.index());
                 }
+                else{
+                    if(r->_prs[msg.from()].maybeUpdate(msg.index())){
+                        switch(r->_prs[msg.from()].getState()){
+                            case sapphiredb::raft::ProgressStateProbe:
+                            {
+                                r->_prs[msg.from()].becomeReplicate();
+                                break;
+                            }
+                            case sapphiredb::raft::ProgressStateSnapshot:
+                            {
+                                r->_prs[msg.from()].becomeProbe();
+                                break;
+                            }
+                            case sapphiredb::raft::ProgressStateReplicate:
+                            {
+                                //TODO
+                                break;
+                            }
+                            default:;
+                        }
+
+                        if(r->maybeCommit()){
+                            r->bcastAppend();
+                        }
+                    }
+                }
             }
         case raftpb::MsgHeartbeatResp :
             {
-                pr.setRecentActive();
+                r->_prs[msg.from()].setRecentActive();
 
-                if(pr.getMatch() < r->_lastApplied){
+                if(r->_prs[msg.from()].getMatch() < r->_lastApplied){
                     r->sendAppend(msg.from());
                 }
                 break;
@@ -238,11 +263,96 @@ void sapphiredb::raft::stepLeader(sapphiredb::raft::Raft* r, raftpb::Message msg
     }
 }
 
+uint64_t sapphiredb::raft::Raft::maybeLastIndex(){
+    if(!this->_entries.empty()) {
+        logger->warn("this->_offset:{:d}", this->_offset);
+        logger->warn("this->_entries.size():{:d}", this->_entries.size());
+        return this->_offset+this->_entries.size()-1;
+    }
+
+    if(this->_snap != nullptr) return this->_snap->metadata().index();
+
+    return 0;
+}
+
+uint64_t sapphiredb::raft::Raft::maybeTerm(uint64_t index){
+    if(index < this->_offset){
+        if(this->_snap == nullptr){
+            return 0;
+        }
+        if(this->_snap->metadata().index() == index){
+            return this->_snap->metadata().term();
+        }
+        return 0;
+    }
+
+    uint64_t last = maybeLastIndex();
+    logger->error("index:{:d}", index);
+    logger->error("last:{:d}", last);
+    logger->error("this->_entries[index-this->_offset-1].term():{:d}", this->_entries[index-this->_offset].term());
+    if(last == 0 || index > last){
+        return 0;
+    }
+
+    return this->_entries[index-this->_offset].term();
+}
+
+void sapphiredb::raft::Raft::stableTo(uint64_t index, uint64_t term){
+    uint64_t gterm = maybeTerm(index);
+    if(gterm == 0) return;
+
+    if(gterm == term && index == this->_offset){
+        this->_entries = ::std::vector<raftpb::Entry>(_entries.begin()+index+1-this->_offset, _entries.end());
+        logger->error("_offset:{:d}", index+1);
+        this->_offset = index+1;
+        //TODO shrink entries
+    }
+}
+
+void sapphiredb::raft::Raft::stableSnapTo(uint64_t index){
+    if(this->_snap != nullptr && this->_snap->metadata().index() == index){
+        this->_snap = nullptr;
+    }
+}
+
+void sapphiredb::raft::Raft::restore(raftpb::Snapshot snap){
+    this->_offset = snap.metadata().index()+1;
+    this->_entries.clear();
+    this->_snap = new raftpb::Snapshot(snap);
+}
+
+void sapphiredb::raft::Raft::truncateAndAppend(::std::vector<raftpb::Entry>& ents){
+    if(ents[0].index() == this->_offset+this->_entries.size()){
+        this->_entries.insert(this->_entries.end(), ents.begin(), ents.end());
+    }
+    else if(ents[0].index() <= this->_offset){
+        logger->info("replace the unstable entries from index {:d}", ents[0].index());
+
+        this->_offset = ents[0].index();
+        this->_entries = ents;
+    }
+    else{
+        logger->info("truncate the unstable entries from index {:d}", ents[0].index());
+
+        this->_entries = ::std::vector<raftpb::Entry>(this->_entries.begin(), this->_entries.begin()+ents[0].index()-this->_offset);
+        this->_entries.insert(this->_entries.end(), ents.begin(), ents.end());
+    }
+}
+
+uint64_t sapphiredb::raft::Raft::lastIndex(){
+    uint64_t index = maybeLastIndex();
+    logger->warn("wtfindex:{:d}", index);
+    if(index > 0) return index;
+    //TODO stroage
+
+    return index;
+}
+
 void sapphiredb::raft::Raft::commitTo(uint64_t commit){
     if(this->_commitIndex < commit){
-        if(this->_lastApplied < commit){
+        if(this->lastIndex() < commit){
             logger->error("commit({:d}) is out of range [lastIndex({:d})]. Was the raft log corrupted, truncated, or lost?",
-             commit, this->_lastApplied);
+             commit, this->lastIndex());
         }
         this->_commitIndex = commit;
     }
@@ -296,6 +406,7 @@ void sapphiredb::raft::stepCandidate(sapphiredb::raft::Raft* r, raftpb::Message 
                 //handle appendEntries
                 if(msg.index() < r->_commitIndex){
                     raftpb::Message tmsg;
+                    tmsg.set_from(r->_id);
                     tmsg.set_to(msg.from());
                     tmsg.set_type(raftpb::MsgAppResp);
                     tmsg.set_index(r->_commitIndex);
@@ -313,22 +424,28 @@ void sapphiredb::raft::stepCandidate(sapphiredb::raft::Raft* r, raftpb::Message 
                     ent.set_data(msg.entries(i).data());
                     ents.push_back(ent);
                 }
-                if(r->tryAppend(msg.index(), msg.logterm(), msg.commit(), ents) > 0){
+                uint64_t mlastIndex = r->maybeAppend(msg.index(), msg.logterm(), msg.commit(), ents);
+                if(mlastIndex > 0){
                     raftpb::Message tmsg;
+                    tmsg.set_from(r->_id);
                     tmsg.set_to(msg.from());
                     tmsg.set_type(raftpb::MsgAppResp);
-                    tmsg.set_index(r->_commitIndex);
+                    tmsg.set_index(mlastIndex);
                     r->send(tmsg);
+
+                    r->Ready = true;
+                    r->node_persist_condition->notify_all();
                 }
                 else{
                     r->logger->info("{:d} rejected msgApp [logterm: {:d}, index: {:d}] from {:d}",
                             r->_id, msg.logterm(), msg.index(), msg.from());
 
                     raftpb::Message tmsg;
+                    tmsg.set_from(r->_id);
                     tmsg.set_to(msg.from());
                     tmsg.set_type(raftpb::MsgAppResp);
                     tmsg.set_reject(true);
-                    tmsg.set_index(r->_commitIndex);
+                    tmsg.set_index(msg.index());
                     r->send(tmsg);
                 }
                 return;
@@ -356,7 +473,11 @@ void sapphiredb::raft::stepFollower(sapphiredb::raft::Raft* r, raftpb::Message m
         case raftpb::MsgHeartbeat:
             {
                 r->_electionElapsed = 0;
-                r->_leader = msg.from();
+                if(r->_leader != msg.from()){
+                    r->_leader = msg.from();
+                    r->_currentTerm = msg.term();
+                    r->logger->warn("id: {:d} change new leader in term {:d}.", r->_id, r->_currentTerm);
+                }
                 r->commitTo(msg.commit());
 
                 raftpb::Message tmsg;
@@ -376,6 +497,7 @@ void sapphiredb::raft::stepFollower(sapphiredb::raft::Raft* r, raftpb::Message m
                 //handle appendEntries
                 if(msg.index() < r->_commitIndex){
                     raftpb::Message tmsg;
+                    tmsg.set_from(r->_id);
                     tmsg.set_to(msg.from());
                     tmsg.set_type(raftpb::MsgAppResp);
                     tmsg.set_index(r->_commitIndex);
@@ -393,28 +515,35 @@ void sapphiredb::raft::stepFollower(sapphiredb::raft::Raft* r, raftpb::Message m
                     ent.set_data(msg.entries(i).data());
                     ents.push_back(ent);
                 }
-                if(r->tryAppend(msg.index(), msg.logterm(), msg.commit(), ents) > 0){
+                uint64_t mlastIndex = r->maybeAppend(msg.index(), msg.logterm(), msg.commit(), ents);
+                if(mlastIndex > 0){
                     raftpb::Message tmsg;
+                    tmsg.set_from(r->_id);
                     tmsg.set_to(msg.from());
                     tmsg.set_type(raftpb::MsgAppResp);
-                    tmsg.set_index(r->_commitIndex);
-                    /*
+                    tmsg.set_index(mlastIndex);
+                    
                     r->logger->warn("entries:");
+                    r->logger->warn("mlastIndex: {:d}", mlastIndex);
                     for(auto entry : r->_entries){
                         ::std::cout << entry.data() << ::std::endl;
                     }
-                    */
+                    
                     r->send(tmsg);
+
+                    r->Ready = true;
+                    r->node_persist_condition->notify_all();
                 }
                 else{
                     r->logger->info("{:d} rejected msgApp [logterm: {:d}, index: {:d}] from {:d}",
                             r->_id, msg.logterm(), msg.index(), msg.from());
 
                     raftpb::Message tmsg;
+                    tmsg.set_from(r->_id);
                     tmsg.set_to(msg.from());
                     tmsg.set_type(raftpb::MsgAppResp);
                     tmsg.set_reject(true);
-                    tmsg.set_index(r->_commitIndex);
+                    tmsg.set_index(msg.index());
                     r->send(tmsg);
                 }
 
@@ -521,6 +650,7 @@ void sapphiredb::raft::Raft::sendHeartbeat(uint64_t to, std::string ctx){
     raftpb::Message msg;
     msg.set_from(this->_id);
     msg.set_to(to);
+    msg.set_term(_currentTerm);
     msg.set_type(raftpb::MsgHeartbeat);
     msg.set_commit(commit);
     msg.set_context(ctx);
@@ -578,9 +708,14 @@ void sapphiredb::raft::Raft::sendAppend(uint64_t to){
     //TODO send snapshot if we failed to get term or entries
 
     msg.set_type(raftpb::MsgApp);
-    msg.set_index(this->_prs[to].getNext()-1);
-    if(this->_prs[to].getNext()-1 == 0) msg.set_logterm(this->_currentTerm-1);
-    else msg.set_logterm(this->_entries[this->_prs[to].getNext()-1].term());
+    //if(this->_prs[to].getNext()-1 == 0){
+        msg.set_index(0);
+        msg.set_logterm(_currentTerm);
+    //}
+    //else{
+    //    msg.set_index(this->_prs[to].getNext()-1);
+    //    msg.set_logterm(this->term(this->_prs[to].getNext()-1));
+    //}
     msg.set_commit(this->_commitIndex);
     
     for(int i=this->_prs[to].getNext()-1; i<this->_entries.size(); ++i){
@@ -620,9 +755,7 @@ bool sapphiredb::raft::Raft::checkQuorumActive(){
 
 //appent entries to local entries
 //success return index, failed return 0
-uint64_t sapphiredb::raft::Raft::tryAppend(const uint64_t& index, const uint64_t& logTerm, const uint64_t& committed, const ::std::vector<raftpb::Entry>& ents){
-    ::std::cout << "this->_currentTerm: " << this->_currentTerm << ::std::endl;
-    ::std::cout << "logTerm: " << logTerm << ::std::endl;
+uint64_t sapphiredb::raft::Raft::maybeAppend(const uint64_t& index, const uint64_t& logTerm, const uint64_t& committed, const ::std::vector<raftpb::Entry>& ents){
     if(this->_entries.size() >= index && this->_currentTerm == logTerm){
         uint64_t newIndex = index + ents.size();
         while(this->_entries.size() > index) this->_entries.pop_back();
@@ -739,16 +872,17 @@ void sapphiredb::raft::Raft::generalStep(raftpb::Message msg){
             {
                 this->addNode(msg.from());
                 this->pushUnknownid(msg.from());
+                this->node_bind_condition->notify_all();
                 raftpb::Message tmsg;
                 tmsg.set_to(msg.from());
                 tmsg.set_term(msg.term());
                 tmsg.set_type(raftpb::MsgNodeResp);
                 this->send(tmsg);
-                this->node_bind_condition->notify_all();
                 break;
             }
         default:
             try{
+                //this->logger->warn("{:s}", this->name(msg.type()));
                 this->_step(this, msg);
             }
             catch(...){
@@ -878,6 +1012,7 @@ bool sapphiredb::raft::Raft::maybeCommit(){
 
     uint64_t mci = mis[this->quorum()-1];
 
+    logger->error("{:d}mci:{:d}",_prs.size(), mci);
     if(mci > this->_commitIndex){ // TODO Term(index)
         this->commitTo(mci);
         return true;
@@ -895,6 +1030,21 @@ void sapphiredb::raft::Raft::appendEntry(::std::vector<raftpb::Entry> ents){
     this->_entries.insert(this->_entries.end(), ents.begin(), ents.end());
     //TODO this->_prs[this->_id].maybeUpdate?
     this->maybeCommit();
+    Ready = true;
+    this->node_persist_condition->notify_all();
+}
+
+uint64_t sapphiredb::raft::Raft::append(::std::vector<raftpb::Entry> ents){
+    if(ents.empty()){
+        return this->lastIndex();
+    }
+
+    if(ents[0].index()-1 < this->_commitIndex){
+        logger->info("{:d} is out of range commitIndex[{:d}]", ents[0].index()-1, this->_commitIndex);
+    }
+
+    this->truncateAndAppend(ents);
+    return this->lastIndex();
 }
 
 bool sapphiredb::raft::Raft::propose(::std::string op){
@@ -914,12 +1064,111 @@ bool sapphiredb::raft::Raft::propose(::std::string op){
     return false;
 }
 
+raftpb::Snapshot sapphiredb::raft::Raft::snapshot(){
+    if(this->_snap != nullptr){
+        return *(this->_snap);
+    }
+
+    //TODO storage
+    return this->_storage->Snapshot();
+}
+
+void sapphiredb::raft::Raft::appliedTo(uint64_t index){
+    if(index == 0){
+        return;
+    }
+
+    if(this->_commitIndex < index || index < this->_lastApplied){
+        logger->info("{:d} is out of range applied[{:d}] commitIndex[{:d}]", index, this->_lastApplied, this->_commitIndex);
+    }
+
+    this->_lastApplied = index;
+}
+
+uint64_t sapphiredb::raft::Raft::lastTerm(){
+    uint64_t t = this->term(this->lastIndex());
+    if(t == 0){
+        logger->info("get last term error");
+    }
+
+    return t;
+}
+
+uint64_t sapphiredb::raft::Raft::maybeFirstIndex(){
+    if(this->_snap != nullptr){
+        return this->_snap->metadata().index();
+    }
+
+    return 0;
+}
+
+uint64_t sapphiredb::raft::Raft::firstIndex(){
+    uint64_t index = this->maybeFirstIndex();
+    if(index > 0){
+        return index;
+    }
+
+    //TODO storage
+
+    return index;
+}
+
+uint64_t sapphiredb::raft::Raft::term(uint64_t index){
+    //uint64_t dummyIndex = this->firstIndex() - 1;
+    //if(index < dummyIndex || index > this->lastIndex()){
+    //    return 0;
+    //}
+
+    uint64_t t = this->maybeTerm(index);
+    if(t > 0){
+        return t;
+    }
+
+    t = this->_storage->Term(index);
+    if(t > 0){
+        return t;
+    }
+
+    logger->error("return term() error");
+    return 0;
+}
+
+void sapphiredb::raft::Raft::storageLog(){
+    /*logger->error("storageLog");
+    if(_snap != nullptr) _storage->ApplySnapshot(*_snap);
+    raftpb::HardState state;
+    state.set_term(_currentTerm);
+    state.set_vote(_vote);
+    state.set_commit(_commitIndex);
+    _storage->SetHardState(state);*/
+    int maxi;
+    for(maxi = 0; maxi < _entries.size(); ++maxi){
+        if(_lastApplied == _entries[maxi].index()) {
+            break;
+        }
+    }
+    logger->error("_commitIndex:{:d} _lastApplied:{:d} maxi:{:d}", _commitIndex, _lastApplied, maxi);
+    if(maxi == _entries.size()){
+        if(_lastApplied < _commitIndex && _commitIndex-_lastApplied <= _entries.size()){
+            _storage->Append(::std::vector<raftpb::Entry>(_entries.begin(), _entries.begin()+_commitIndex));
+        }
+    }
+    else{
+        if(_lastApplied < _commitIndex && _commitIndex-_lastApplied <= _entries.size()){
+            _storage->Append(::std::vector<raftpb::Entry>(_entries.begin()+maxi+1, _entries.begin()+maxi+1+_commitIndex-_lastApplied));
+        }
+    }
+
+    //TODO do something about exec log
+    appliedTo(_commitIndex);
+}
+
 sapphiredb::raft::Raft::Raft(uint64_t id, ::std::condition_variable* tsend_condition, ::std::condition_variable* trecv_condition,
-    ::std::condition_variable* tbind_condition, ::std::condition_variable* tstep_condition,
-    ::std::string path, uint32_t heartbeatTimeout, uint32_t electionTimeout) :
+    ::std::condition_variable* tbind_condition, ::std::condition_variable* tstep_condition, ::std::condition_variable* tpersist_condition,
+    ::std::string path, uint32_t heartbeatTimeout, uint32_t electionTimeout, ::std::string storage_path) :
     _currentTerm(0), _vote(0), _id(id), _leader(0), isLeader(false), _state(sapphiredb::raft::STATE_FOLLOWER), _commitIndex(0), _lastApplied(0),
     _heartbeatElapsed(0), _heartbeatTimeout(heartbeatTimeout), _electionTimeout(electionTimeout), _electionElapsed(0),
-    _step(sapphiredb::raft::stepFollower), _tick(sapphiredb::raft::tickElection), _checkQuorum(false){
+    _step(sapphiredb::raft::stepFollower), _tick(sapphiredb::raft::tickElection), _checkQuorum(false), Ready(false){
 
     try{
         //FILE* log = fopen(path.c_str(), "w");
@@ -932,6 +1181,24 @@ sapphiredb::raft::Raft::Raft(uint64_t id, ::std::condition_variable* tsend_condi
         this->node_recv_condition = trecv_condition;
         this->node_bind_condition = tbind_condition;
         this->node_step_condition = tstep_condition;
+        this->node_persist_condition = tpersist_condition;
+
+        //new raft log
+        this->_storage = new sapphiredb::raft::Storage();
+        uint64_t firstIndex = this->_storage->FirstIndex();
+        uint64_t lastIndex = this->_storage->LastIndex();
+
+        if(lastIndex > 0) this->_offset = lastIndex+1;
+        else this->_offset = 1;
+        logger->error("lastIndex:{:d}", lastIndex+1);
+        logger->error("this->_offset:{:d}", this->_offset);
+        if(firstIndex > 0) this->_commitIndex = firstIndex-1;
+        if(firstIndex > 0) this->_lastApplied = firstIndex-1;
+        ::std::vector<raftpb::Entry> rents = this->_storage->Entries();
+        ::std::cout << "rents.size(): " << rents.size() << ::std::endl;
+        for(int i=0; i<rents.size(); ++i){
+            ::std::cout << "*********entry->set_data(tents[i].data()): " << rents[i].data() << ::std::endl;
+        }
     }
     catch(...){
         ::std::cout << "some alloc error" << ::std::endl;
