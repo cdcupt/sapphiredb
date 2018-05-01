@@ -239,5 +239,8 @@ void sapphiredb::raft::Node::run(){
     }
 }
 
-
 //TODO mutli send heartbeat to peer about progress struct
+
+bool sapphiredb::raft::Node::propose(::std::string op){
+    return this->raft->propose(op);
+}

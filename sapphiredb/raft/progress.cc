@@ -58,3 +58,14 @@ void sapphiredb::raft::Progress::setNext(uint64_t next){
 void sapphiredb::raft::Progress::optimisticUpdate(uint64_t n){
     this->_next = n+1;
 }
+
+bool sapphiredb::raft::Progress::maybeUpdate(uint64_t n){
+    if(this->_next < n+1){
+        this->_next = n+1;
+    }
+    if(this->_match < n){
+        this->_match = n;
+        return true;
+    }
+    return false;
+}

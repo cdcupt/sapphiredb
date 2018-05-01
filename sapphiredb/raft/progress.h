@@ -7,12 +7,12 @@ namespace sapphiredb
 {
 namespace raft
 {
-typedef uint64_t ProgressStateType;
+//typedef uint64_t ProgressStateType;
 
-enum{
-    ProgressStateSnapshot = 1,
-    ProgressStateProbe,
-    ProgressStateReplicate
+enum ProgressStateType{
+    ProgressStateProbe = 1,
+    ProgressStateReplicate = 2,
+    ProgressStateSnapshot = 3
 };
 
 class Progress{
@@ -38,6 +38,7 @@ public:
     uint64_t getNext();
     void setNext(uint64_t next);
     void optimisticUpdate(uint64_t n);
+    bool maybeUpdate(uint64_t n);
 
     void becomeProbe();
     void becomeReplicate();

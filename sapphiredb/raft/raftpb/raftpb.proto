@@ -45,6 +45,7 @@ enum MessageType {
     MsgNode = 11;
     MsgNodeResp = 12;
     MsgBeat = 13;
+    MsgProp = 14;
 }
 
 message Message {

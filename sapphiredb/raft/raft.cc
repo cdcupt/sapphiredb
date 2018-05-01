@@ -180,6 +180,20 @@ void sapphiredb::raft::stepLeader(sapphiredb::raft::Raft* r, raftpb::Message msg
                 r->bcastHeartbeat();
                 return;
             }
+        case raftpb::MsgProp:
+            {
+                if(r->_prs.empty()){
+                    r->logger->warn("%d stepped empty MsgProp", r->_id);
+                }
+                ::std::vector<raftpb::Entry> ents;
+                for(int i=0; i<msg.entries_size(); ++i){
+                    ents.push_back(msg.entries(i));
+                }
+
+                r->appendEntry(ents);
+                r->bcastAppend();
+                return;
+            }
         //proactively check for quorum
         case raftpb::MsgCheckQuorum:
             {
@@ -291,12 +305,12 @@ void sapphiredb::raft::stepCandidate(sapphiredb::raft::Raft* r, raftpb::Message 
                     return;
                 }
 
-                ::std::vector<Entrie> ents;
+                ::std::vector<raftpb::Entry> ents;
                 for(int i=0; i<msg.entries_size(); ++i){
-                    Entrie ent;
-                    ent.setIndex(msg.entries(i).index());
-                    ent.setTerm(msg.entries(i).term());
-                    ent.setOpt(msg.entries(i).data());
+                    raftpb::Entry ent;
+                    ent.set_index(msg.entries(i).index());
+                    ent.set_term(msg.entries(i).term());
+                    ent.set_data(msg.entries(i).data());
                     ents.push_back(ent);
                 }
                 if(r->tryAppend(msg.index(), msg.logterm(), msg.commit(), ents) > 0){
@@ -371,12 +385,12 @@ void sapphiredb::raft::stepFollower(sapphiredb::raft::Raft* r, raftpb::Message m
                     return;
                 }
 
-                ::std::vector<Entrie> ents;
+                ::std::vector<raftpb::Entry> ents;
                 for(int i=0; i<msg.entries_size(); ++i){
-                    Entrie ent;
-                    ent.setIndex(msg.entries(i).index());
-                    ent.setTerm(msg.entries(i).term());
-                    ent.setOpt(msg.entries(i).data());
+                    raftpb::Entry ent;
+                    ent.set_index(msg.entries(i).index());
+                    ent.set_term(msg.entries(i).term());
+                    ent.set_data(msg.entries(i).data());
                     ents.push_back(ent);
                 }
                 if(r->tryAppend(msg.index(), msg.logterm(), msg.commit(), ents) > 0){
@@ -384,6 +398,12 @@ void sapphiredb::raft::stepFollower(sapphiredb::raft::Raft* r, raftpb::Message m
                     tmsg.set_to(msg.from());
                     tmsg.set_type(raftpb::MsgAppResp);
                     tmsg.set_index(r->_commitIndex);
+                    /*
+                    r->logger->warn("entries:");
+                    for(auto entry : r->_entries){
+                        ::std::cout << entry.data() << ::std::endl;
+                    }
+                    */
                     r->send(tmsg);
                 }
                 else{
@@ -421,7 +441,7 @@ void sapphiredb::raft::stepFollower(sapphiredb::raft::Raft* r, raftpb::Message m
 //send RPC whit entries(or nothing) to the given peer.
 /*
 ::std::pair<uint64_t, bool> sendAppend(uint64_t term, uint64_t id, uint64_t preLogIndex,
-        uint64_t preLogTerm, ::std::vector<sapphiredb::raft::Entrie> entries, uint64_t leaderCommit){
+        uint64_t preLogTerm, ::std::vector<raftpb::Entry> entries, uint64_t leaderCommit){
 
     if(term < this->_currentTerm) return ::std::pair<uint64_t, bool>(this->_currentTerm, false);
 
@@ -434,8 +454,8 @@ void sapphiredb::raft::stepFollower(sapphiredb::raft::Raft* r, raftpb::Message m
 
     for(int i=preLogIndex; i<this->_entries.size(); ++i){
         if(this->_entries[i].getTerm() != entries[i-preLogIndex].getTerm()){
-            this->_entries = ::std::vector<Entrie>(this->_entries.begin(), this->_entries.begin()+i);
-            this->_entries += ::std::vector<Entrie>(entries.begin()+i-preLogIndex, entries.end());
+            this->_entries = ::std::vector<raftpb::Entry>(this->_entries.begin(), this->_entries.begin()+i);
+            this->_entries += ::std::vector<raftpb::Entry>(entries.begin()+i-preLogIndex, entries.end());
             break;
         }
     }
@@ -550,24 +570,26 @@ void sapphiredb::raft::Raft::bcastHeartbeat_fast(){
 
 //message box approach sendAppend
 void sapphiredb::raft::Raft::sendAppend(uint64_t to){
+    if(this->_entries.empty()) logger->warn("send empty append log in term %d", this->_currentTerm);
     raftpb::Message msg;
+    msg.set_from(this->_id);
     msg.set_to(to);
 
     //TODO send snapshot if we failed to get term or entries
 
     msg.set_type(raftpb::MsgApp);
     msg.set_index(this->_prs[to].getNext()-1);
-    msg.set_logterm(this->_entries[this->_entries.size()-1].getTerm());
-
+    if(this->_prs[to].getNext()-1 == 0) msg.set_logterm(this->_currentTerm-1);
+    else msg.set_logterm(this->_entries[this->_prs[to].getNext()-1].term());
+    msg.set_commit(this->_commitIndex);
+    
     for(int i=this->_prs[to].getNext()-1; i<this->_entries.size(); ++i){
         raftpb::Entry* entry = msg.add_entries();
         entry->set_type(raftpb::EntryType::EntryNormal);
-        entry->set_term(this->_entries[i].getTerm());
-        entry->set_index(this->_entries[i].getIndex());
-        entry->set_data(this->_entries[i].getOpt());
+        entry->set_term(this->_entries[i].term());
+        entry->set_index(this->_entries[i].index());
+        entry->set_data(this->_entries[i].data());
     }
-
-    msg.set_commit(this->_commitIndex);
 
     if(msg.entries_size() > 0){
         switch(this->_prs[to].getState()){
@@ -598,9 +620,12 @@ bool sapphiredb::raft::Raft::checkQuorumActive(){
 
 //appent entries to local entries
 //success return index, failed return 0
-uint64_t sapphiredb::raft::Raft::tryAppend(const uint64_t& index, const uint64_t& logTerm, const uint64_t& committed, const ::std::vector<Entrie>& ents){
-    if(this->_prs.size() >= index && this->_commitIndex == logTerm){
+uint64_t sapphiredb::raft::Raft::tryAppend(const uint64_t& index, const uint64_t& logTerm, const uint64_t& committed, const ::std::vector<raftpb::Entry>& ents){
+    ::std::cout << "this->_currentTerm: " << this->_currentTerm << ::std::endl;
+    ::std::cout << "logTerm: " << logTerm << ::std::endl;
+    if(this->_entries.size() >= index && this->_currentTerm == logTerm){
         uint64_t newIndex = index + ents.size();
+        while(this->_entries.size() > index) this->_entries.pop_back();
         this->_entries.insert(this->_entries.end(), ents.begin(), ents.end());
 
         return newIndex;
@@ -610,7 +635,7 @@ uint64_t sapphiredb::raft::Raft::tryAppend(const uint64_t& index, const uint64_t
 
 void sapphiredb::raft::Raft::bcastAppend(){
     this->forEachProgress(this->_prs, [](sapphiredb::raft::Raft* r, uint64_t id, Progress& _){
-        if(id == r->_id) return;
+        if(id == r->_id || id == 0) return;
 
         r->sendAppend(id);
     });
@@ -779,7 +804,7 @@ sapphiredb::raft::Sendstruct sapphiredb::raft::Raft::tryPopSendbuf(){
     ::std::unique_lock<::std::mutex> lock(this->sendbuf_mutex);
     if(!this->_sendmsgs.empty()){
         raftpb::Message msg = std::move(this->_sendmsgs.front());
-        ::std::cout << "_sendmsgs: " << name(msg.type()) << ::std::endl;
+        ::std::cout << "_sendmsgs: " << name(msg.type()) << " to " << msg.to() << ::std::endl;
         this->_sendmsgs.pop();
         return sapphiredb::raft::Sendstruct(serializeData(msg), msg.to());
     }
@@ -790,11 +815,11 @@ sapphiredb::raft::Sendstruct sapphiredb::raft::Raft::tryPopSendbuf(){
 bool sapphiredb::raft::Raft::tryPushRecvbuf(::std::string data){
     if(!data.empty()){
         ::std::unique_lock<::std::mutex> lock(this->recvbuf_mutex);
-        if(!data.empty()){
-            this->_recvmsgs.push(deserializeData(data));
-            ::std::cout << "_recvmsgs: " << name(this->_recvmsgs.front().type()) << ::std::endl;
-            this->node_step_condition->notify_all();
-        }
+
+        this->_recvmsgs.push(deserializeData(data));
+        ::std::cout << "_recvmsgs: " << name(this->_recvmsgs.front().type()) << ::std::endl;
+        this->node_step_condition->notify_all();
+
         return true;
     }
 
@@ -824,6 +849,7 @@ bool sapphiredb::raft::Raft::emptyUnknownid(){
 
 void sapphiredb::raft::Raft::addNode(uint64_t id, bool isLeader){
     if(this->_prs.find(id) == this->_prs.end()){
+        (this->_prs)[id].resetState(ProgressStateProbe);
         (this->_prs)[id].setMatch(0);
         (this->_prs)[id].setNext(this->_lastApplied+1);
         (this->_prs)[id].setRecentActive();
@@ -840,6 +866,52 @@ void sapphiredb::raft::Raft::deleteNode(uint64_t id){
     else{
         logger->warn("{:d} try delete {:d}, but it does not exist", this->_id, id);
     }
+}
+
+bool sapphiredb::raft::Raft::maybeCommit(){
+    ::std::vector<uint64_t> mis;
+    for(::std::unordered_map<uint64_t, Progress>::iterator it = this->_prs.begin(); it != this->_prs.end(); ++it){
+        mis.push_back(it->second.getMatch());
+    }
+
+    sort(mis.begin(), mis.end());
+
+    uint64_t mci = mis[this->quorum()-1];
+
+    if(mci > this->_commitIndex){ // TODO Term(index)
+        this->commitTo(mci);
+        return true;
+    }
+    return false;
+}
+
+void sapphiredb::raft::Raft::appendEntry(::std::vector<raftpb::Entry> ents){
+    uint64_t index = this->_lastApplied;
+    for(uint64_t i=0; i<ents.size(); ++i){
+        ents[i].set_term(this->_currentTerm);
+        ents[i].set_index(index+1+i);
+    }
+
+    this->_entries.insert(this->_entries.end(), ents.begin(), ents.end());
+    //TODO this->_prs[this->_id].maybeUpdate?
+    this->maybeCommit();
+}
+
+bool sapphiredb::raft::Raft::propose(::std::string op){
+    if(!op.empty()){
+        ::std::unique_lock<::std::mutex> lock(this->recvbuf_mutex);
+        
+        raftpb::Message msg;
+        msg.set_type(raftpb::MsgProp);
+        raftpb::Entry* entry = msg.add_entries();
+        entry->set_data(op);
+        this->_recvmsgs.push(msg);
+        this->node_step_condition->notify_all();
+        
+        return true;
+    }
+
+    return false;
 }
 
 sapphiredb::raft::Raft::Raft(uint64_t id, ::std::condition_variable* tsend_condition, ::std::condition_variable* trecv_condition,

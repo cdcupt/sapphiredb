@@ -53,7 +53,7 @@ public:
     }
 };
 
-class Entrie{
+class Entry{
 private:
     uint64_t _index;
     uint64_t _term;
@@ -100,7 +100,7 @@ public:
     uint64_t _id;
     bool isLeader;
     std::shared_ptr<spdlog::logger> logger;
-    ::std::vector<Entrie> _entries;
+    ::std::vector<raftpb::Entry> _entries;
     //prs represents all follower's progress in the view of the leader.
     ::std::unordered_map<uint64_t, Progress> _prs;
     ::std::unordered_map<uint64_t, int32_t> _votes;
@@ -164,7 +164,7 @@ public:
     void generalStep(raftpb::Message msg);
 
     //try to modify constant data
-    uint64_t tryAppend(const uint64_t& index, const uint64_t& logTerm, const uint64_t& committed, const ::std::vector<Entrie>& ents);
+    uint64_t tryAppend(const uint64_t& index, const uint64_t& logTerm, const uint64_t& committed, const ::std::vector<raftpb::Entry>& ents);
 
     ::std::string serializeData(raftpb::Message msg);
     raftpb::Message deserializeData(::std::string data);
@@ -190,7 +190,7 @@ public:
 
     //two main RPC
     ::std::pair<uint64_t, bool> sendAppend(uint64_t term, uint64_t id, uint64_t preLogIndex,
-            uint64_t preLogTerm, ::std::vector<Entrie> entries, uint64_t leaderCommit);
+            uint64_t preLogTerm, ::std::vector<Entry> entries, uint64_t leaderCommit);
     ::std::pair<uint64_t, bool> requestVote(uint64_t term, uint64_t candidateId,
             uint64_t lastLogIndex, uint64_t lastLogTerm);
 
@@ -219,6 +219,10 @@ public:
     void pushUnknownid(int32_t&& id);
     int32_t popUnknownid();
     bool emptyUnknownid();
+
+    bool maybeCommit();
+    void appendEntry(::std::vector<raftpb::Entry> ents);
+    bool propose(::std::string op);
 
     inline ::std::string name(raftpb::MessageType e){
         switch(e){

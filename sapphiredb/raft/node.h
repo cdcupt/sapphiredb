@@ -75,6 +75,7 @@ public:
     ~Node();
 
     void run();
+    bool propose(::std::string op);
 };
 } //namespace raft
 } //namespace sapphiredb
