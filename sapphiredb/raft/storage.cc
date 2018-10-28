@@ -213,68 +213,26 @@ void sapphiredb::raft::Storage::SetHardState(raftpb::HardState hardstate){
 }
 
 void sapphiredb::raft::Storage::Append(::std::vector<raftpb::Entry> ents){
-    ::std::ifstream fin(_path, ::std::ios::binary);
-    if (!fin){
-        ::std::ofstream file(_path, ::std::ios::trunc|::std::ios::binary);
-        raftpb::Storage msg;
-        for(int i=0; i<ents.size(); ++i){
-            raftpb::Entry* entry = msg.add_entries();
-            entry->set_type(ents[i].type());
-            entry->set_term(ents[i].term());
-            entry->set_index(ents[i].index());
-            entry->set_data(ents[i].data());
-        }
-        ::std::string data = serializeData(msg);
-
-
-        raftpb::Storage tmsg = deserializeData(data);
-        ::std::vector<raftpb::Entry> tents;
-        for(int i=0; i<tmsg.entries_size(); ++i){
-            tents.push_back(tmsg.entries(i));
-        }
-        ::std::cout << "tents.size(): " << tents.size() << ::std::endl;
-        for(int i=0; i<tents.size(); ++i){
-            ::std::cout << "*********entry->set_data(tents[i].data()): " << tents[i].data() << ::std::endl;
-        }
-
-
-
-        //file << data;
-        file.write(data.c_str(), data.size());
-        file.close();
+    ::std::ofstream file(_path, ::std::ios::ate|::std::ios::binary);
+    raftpb::Storage msg;
+    for(int i=0; i<ents.size(); ++i){
+        raftpb::Entry* entry = msg.add_entries();
+        entry->set_type(ents[i].type());
+        entry->set_term(ents[i].term());
+        entry->set_index(ents[i].index());
+        entry->set_data(ents[i].data());
     }
-    else{
-        char rdata[1024];
-        fin.read(rdata, 1024);
-        ::std::string sdata(rdata);
-        raftpb::Storage msg = deserializeData(sdata);
-        fin.close();
-
-        ::std::ofstream file(_path, ::std::ios::trunc|::std::ios::binary);
-        for(int i=0; i<ents.size(); ++i){
-            raftpb::Entry* entry = msg.add_entries();
-            entry->set_type(ents[i].type());
-            entry->set_term(ents[i].term());
-            entry->set_index(ents[i].index());
-            entry->set_data(ents[i].data());
-        }
-        ::std::string data = serializeData(msg);
+    ::std::string data = serializeData(msg);
 
 
-        raftpb::Storage tmsg = deserializeData(data);
-        ::std::vector<raftpb::Entry> tents;
-        for(int i=0; i<tmsg.entries_size(); ++i){
-            tents.push_back(tmsg.entries(i));
-        }
-        ::std::cout << "tents.size(): " << tents.size() << ::std::endl;
-        for(int i=0; i<tents.size(); ++i){
-            ::std::cout << "*********entry->set_data(tents[i].data()): " << tents[i].data() << ::std::endl;
-        }
-
-
-        //file << data;
-        file.write(data.c_str(), data.size());
-        file.close();
+    raftpb::Storage tmsg = deserializeData(data);
+    ::std::vector<raftpb::Entry> tents;
+    for(int i=0; i<tmsg.entries_size(); ++i){
+        tents.push_back(tmsg.entries(i));
     }
+
+    //file << data;
+    file.write(data.c_str(), data.size());
+    file.close();
 }
 //TODO wal

@@ -708,14 +708,14 @@ void sapphiredb::raft::Raft::sendAppend(uint64_t to){
     //TODO send snapshot if we failed to get term or entries
 
     msg.set_type(raftpb::MsgApp);
-    //if(this->_prs[to].getNext()-1 == 0){
+    if(this->_prs[to].getNext()-1 == 0){
         msg.set_index(0);
         msg.set_logterm(_currentTerm);
-    //}
-    //else{
-    //    msg.set_index(this->_prs[to].getNext()-1);
-    //    msg.set_logterm(this->term(this->_prs[to].getNext()-1));
-    //}
+    }
+    else{
+        msg.set_index(this->_prs[to].getNext()-1);
+        msg.set_logterm(this->term(this->_prs[to].getNext()-1));
+    }
     msg.set_commit(this->_commitIndex);
     
     for(int i=this->_prs[to].getNext()-1; i<this->_entries.size(); ++i){
@@ -1172,7 +1172,7 @@ sapphiredb::raft::Raft::Raft(uint64_t id, ::std::condition_variable* tsend_condi
 
     try{
         //FILE* log = fopen(path.c_str(), "w");
-        //this->logger = spdlog::basic_logger_mt("logger", path);
+        //this->logger = spdlog::basic_logger_mt("raft_console", path);
         this->logger = spdlog::stdout_color_mt("raft_console");
 
         this->resetRandomizedElectionTimeout();
